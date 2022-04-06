@@ -1,0 +1,193 @@
+2022-04-05 09:32:08.046 GMT,,,1,,624c0c98.1,1,,2022-04-05 09:32:08 GMT,,0,LOG,00000,"ending log output to stderr",,"Future log output will go to log destination ""csvlog"".",,,,,,,""
+2022-04-05 09:32:08.053 GMT,,,79,,624c0c98.4f,1,,2022-04-05 09:32:08 GMT,,0,LOG,00000,"database system was shut down at 2022-04-05 09:32:07 GMT",,,,,,,,,""
+2022-04-05 09:32:08.059 GMT,,,1,,624c0c98.1,2,,2022-04-05 09:32:08 GMT,,0,LOG,00000,"database system is ready to accept connections",,,,,,,,,""
+2022-04-05 09:32:10.420 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,1,"idle",2022-04-05 09:32:10 GMT,3/5,0,LOG,00000,"statement: CREATE TABLE ""migrations"" (""id"" SERIAL NOT NULL, ""timestamp"" bigint NOT NULL, ""name"" character varying NOT NULL, CONSTRAINT ""PK_8c82d7f526340ab734260ea46be"" PRIMARY KEY (""id""))",,,,,,,,,""
+2022-04-05 09:32:10.427 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,2,"idle",2022-04-05 09:32:10 GMT,3/7,0,LOG,00000,"statement: CREATE TABLE ""typeorm_metadata"" (""type"" character varying NOT NULL, ""database"" character varying, ""schema"" character varying, ""table"" character varying, ""name"" character varying, ""value"" text)",,,,,,,,,""
+2022-04-05 09:32:10.439 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,3,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,0,LOG,00000,"statement: CREATE TABLE ""loc_request""
+                                     (
+                                         ""id""                uuid                   NOT NULL,
+                                         ""status""            character varying(255) NOT NULL,
+                                         ""requester_address"" character varying(255) NOT NULL,
+                                         ""owner_address""     character varying(255) NOT NULL,
+                                         ""description""       character varying(255) NOT NULL,
+                                         ""loc_type""          character varying(255) NOT NULL,
+                                         ""decision_on""       TIMESTAMP,
+                                         ""reject_reason""     character varying(255),
+                                         ""created_on""        TIMESTAMP,
+                                         ""closed_on""         TIMESTAMP,
+                                         ""loc_created_on""    TIMESTAMP,
+                                         ""first_name""        character varying(255),
+                                         ""last_name""         character varying(255),
+                                         ""email""             character varying(255),
+                                         ""phone_number""      character varying(255),
+                                         CONSTRAINT ""PK_loc_request"" PRIMARY KEY (""id"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.445 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,4,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""loc_request_file""
+                                     (
+                                         ""request_id""   uuid                   NOT NULL,
+                                         ""hash""         character varying      NOT NULL,
+                                         ""index""        integer                NOT NULL,
+                                         ""added_on""     TIMESTAMP,
+                                         ""name""         character varying(255) NOT NULL,
+                                         ""oid""          integer                NOT NULL,
+                                         ""content_type"" character varying(255) NOT NULL,
+                                         ""draft""        boolean                NOT NULL,
+                                         CONSTRAINT ""PK_loc_request_file"" PRIMARY KEY (""request_id"", ""hash"", ""index"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.448 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,5,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""loc_request_file""
+                ADD CONSTRAINT ""FK_loc_request_file_loc_request"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request"" (""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.451 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,6,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""loc_metadata_item""
+                                     (
+                                         ""request_id"" uuid                   NOT NULL,
+                                         ""index""      integer                NOT NULL,
+                                         ""added_on""   TIMESTAMP,
+                                         ""name""       character varying(255) NOT NULL,
+                                         ""value""      character varying(255) NOT NULL,
+                                         CONSTRAINT ""PK_loc_metadata_item"" PRIMARY KEY (""request_id"", ""index"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.455 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,7,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""loc_metadata_item""
+                ADD CONSTRAINT ""FK_loc_metadata_item_loc_request"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request"" (""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.459 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,8,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""loc_link""
+                                     (
+                                         ""request_id"" uuid      NOT NULL,
+                                         ""index""      integer   NOT NULL,
+                                         ""added_on""   TIMESTAMP NOT NULL,
+                                         ""target""     uuid      NOT NULL,
+                                         CONSTRAINT ""PK_loc_link"" PRIMARY KEY (""request_id"", ""index"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.461 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,9,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""loc_link""
+                ADD CONSTRAINT ""FK_loc_link_loc_request"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request"" (""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.470 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,10,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""protection_request""
+                                     (
+                                         ""id""                          uuid                   NOT NULL,
+                                         ""address_to_recover""          character varying(255),
+                                         ""created_on""                  TIMESTAMP,
+                                         ""is_recovery""                 boolean                NOT NULL,
+                                         ""requester_address""           character varying(255) NOT NULL,
+                                         ""email""                       character varying(255) NOT NULL,
+                                         ""first_name""                  character varying(255) NOT NULL,
+                                         ""last_name""                   character varying(255) NOT NULL,
+                                         ""phone_number""                character varying(255) NOT NULL,
+                                         ""city""                        character varying(255) NOT NULL,
+                                         ""country""                     character varying(255) NOT NULL,
+                                         ""line1""                       character varying(255) NOT NULL,
+                                         ""line2""                       character varying(255),
+                                         ""postal_code""                 character varying(255) NOT NULL,
+                                         ""status""                      character varying(255) NOT NULL,
+                                         ""other_legal_officer_address"" character varying(255) NOT NULL,
+                                         ""decision_on""                 TIMESTAMP,
+                                         ""reject_reason""               character varying(255),
+                                         ""loc_id""                      uuid,
+                                         CONSTRAINT ""UQ_protection_request_requester_address"" UNIQUE (""requester_address""),
+                                         CONSTRAINT ""PK_protection_request"" PRIMARY KEY (""id"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.475 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,11,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""session""
+                                     (
+                                         ""user_address"" character varying(255) NOT NULL,
+                                         ""session_id""   uuid                   NOT NULL,
+                                         ""created_on""   TIMESTAMP,
+                                         CONSTRAINT ""PK_session"" PRIMARY KEY (""user_address"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.478 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,12,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""sync_point""
+                                     (
+                                         ""name""                     character varying NOT NULL,
+                                         ""latest_head_block_number"" bigint            NOT NULL,
+                                         ""updated_on""               TIMESTAMP         NOT NULL,
+                                         CONSTRAINT ""PK_sync_point"" PRIMARY KEY (""name"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.484 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,13,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""transaction""
+                                     (
+                                         ""block_number""    bigint                 NOT NULL,
+                                         ""extrinsic_index"" integer                NOT NULL,
+                                         ""from_address""    character varying(255) NOT NULL,
+                                         ""to_address""      character varying(255),
+                                         ""transfer_value""  numeric(50)            NOT NULL,
+                                         ""tip""             numeric(50)            NOT NULL,
+                                         ""fee""             numeric(50)            NOT NULL,
+                                         ""reserved""        numeric(50)            NOT NULL,
+                                         ""pallet""          character varying      NOT NULL,
+                                         ""method""          character varying      NOT NULL,
+                                         ""created_on""      character varying      NOT NULL,
+                                         CONSTRAINT ""PK_transaction"" PRIMARY KEY (""block_number"", ""extrinsic_index"")
+                                     )",,,,,,,,,""
+2022-04-05 09:32:10.489 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,14,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1636720219315', $2 = 'InitialSchema1636720219315'",,,,,,,,""
+2022-04-05 09:32:10.490 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,15,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" DROP CONSTRAINT ""FK_loc_request_file_loc_request""",,,,,,,,,""
+2022-04-05 09:32:10.490 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,16,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" DROP CONSTRAINT ""FK_loc_metadata_item_loc_request""",,,,,,,,,""
+2022-04-05 09:32:10.491 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,17,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" DROP CONSTRAINT ""FK_loc_link_loc_request""",,,,,,,,,""
+2022-04-05 09:32:10.492 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,18,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""transaction"" ADD ""successful"" boolean NOT NULL DEFAULT true",,,,,,,,,""
+2022-04-05 09:32:10.492 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,19,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""transaction"" ADD ""error_section"" character varying",,,,,,,,,""
+2022-04-05 09:32:10.492 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,20,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""transaction"" ADD ""error_name"" character varying",,,,,,,,,""
+2022-04-05 09:32:10.493 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,21,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""transaction"" ADD ""error_details"" character varying",,,,,,,,,""
+2022-04-05 09:32:10.493 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,22,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ADD CONSTRAINT ""FK_loc_request_file_request_id"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request""(""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.495 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,23,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD CONSTRAINT ""FK_loc_metadata_item_request_id"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request""(""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.496 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,24,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ADD CONSTRAINT ""FK_loc_link_request_id"" FOREIGN KEY (""request_id"") REFERENCES ""loc_request""(""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.497 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,25,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1637061269576', $2 = 'TransactionErrors1637061269576'",,,,,,,,""
+2022-04-05 09:32:10.498 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,26,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" DROP CONSTRAINT ""PK_loc_request_file""",,,,,,,,,""
+2022-04-05 09:32:10.498 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,27,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ADD CONSTRAINT ""PK_loc_request_file"" PRIMARY KEY (""request_id"", ""hash"")",,,,,,,,,""
+2022-04-05 09:32:10.500 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,28,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ADD CONSTRAINT ""UQ_loc_request_file_request_id_index"" UNIQUE (""request_id"", ""index"")",,,,,,,,,""
+2022-04-05 09:32:10.501 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,29,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1637229545243', $2 = 'AddLocFileUniqueConstraint1637229545243'",,,,,,,,""
+2022-04-05 09:32:10.502 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,30,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD ""value_text"" text NOT NULL DEFAULT ''",,,,,,,,,""
+2022-04-05 09:32:10.502 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,31,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ALTER COLUMN ""value"" DROP NOT NULL",,,,,,,,,""
+2022-04-05 09:32:10.503 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,32,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: UPDATE ""public"".""loc_metadata_item"" SET ""value_text"" = ""value""",,,,,,,,,""
+2022-04-05 09:32:10.504 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,33,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1637834996469', $2 = 'MakeMetadataValueText1637834996469'",,,,,,,,""
+2022-04-05 09:32:10.504 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,34,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request"" ADD ""void_reason"" text",,,,,,,,,""
+2022-04-05 09:32:10.505 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,35,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request"" ADD ""voided_on"" TIMESTAMP",,,,,,,,,""
+2022-04-05 09:32:10.506 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,36,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1638269147841', $2 = 'AddVoidInfo1638269147841'",,,,,,,,""
+2022-04-05 09:32:10.507 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,37,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ADD ""nature"" character varying(255)",,,,,,,,,""
+2022-04-05 09:32:10.507 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,38,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD ""draft"" boolean NOT NULL DEFAULT false",,,,,,,,,""
+2022-04-05 09:32:10.508 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,39,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ADD ""draft"" boolean NOT NULL DEFAULT false",,,,,,,,,""
+2022-04-05 09:32:10.508 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,40,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ADD ""nature"" character varying(255)",,,,,,,,,""
+2022-04-05 09:32:10.508 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,41,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" DROP CONSTRAINT ""PK_loc_metadata_item""",,,,,,,,,""
+2022-04-05 09:32:10.509 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,42,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD CONSTRAINT ""PK_loc_metadata_item"" PRIMARY KEY (""request_id"", ""name"")",,,,,,,,,""
+2022-04-05 09:32:10.510 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,43,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ALTER COLUMN ""added_on"" DROP NOT NULL",,,,,,,,,""
+2022-04-05 09:32:10.511 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,44,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" DROP CONSTRAINT ""PK_loc_link""",,,,,,,,,""
+2022-04-05 09:32:10.511 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,45,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ADD CONSTRAINT ""PK_loc_link"" PRIMARY KEY (""request_id"", ""target"")",,,,,,,,,""
+2022-04-05 09:32:10.512 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,46,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD CONSTRAINT ""UQ_loc_metadata_item_request_id_index"" UNIQUE (""request_id"", ""index"")",,,,,,,,,""
+2022-04-05 09:32:10.513 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,47,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_link"" ADD CONSTRAINT ""UQ_loc_link_request_id_index"" UNIQUE (""request_id"", ""index"")",,,,,,,,,""
+2022-04-05 09:32:10.515 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,48,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1638955476613', $2 = 'AddAttributesForDraft1638955476613'",,,,,,,,""
+2022-04-05 09:32:10.515 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,49,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request"" ADD ""requester_identity_loc"" uuid",,,,,,,,,""
+2022-04-05 09:32:10.516 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,50,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request"" ALTER COLUMN ""requester_address"" DROP NOT NULL",,,,,,,,,""
+2022-04-05 09:32:10.516 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,51,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request"" ADD CONSTRAINT ""FK_loc_request_requester_identity_loc"" FOREIGN KEY (""requester_identity_loc"") REFERENCES ""loc_request""(""id"") ON DELETE NO ACTION ON UPDATE NO ACTION",,,,,,,,,""
+2022-04-05 09:32:10.517 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,52,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1639999832301', $2 = 'AddRequesterIdentityLoc1639999832301'",,,,,,,,""
+2022-04-05 09:32:10.518 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,53,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ADD ""submitter"" character varying(255)",,,,,,,,,""
+2022-04-05 09:32:10.518 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,54,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: 
+            UPDATE loc_request_file item
+            SET submitter = (SELECT owner_address FROM loc_request request where item.request_id = request.id)
+        ",,,,,,,,,""
+2022-04-05 09:32:10.519 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,55,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_request_file"" ALTER COLUMN ""submitter"" SET NOT NULL",,,,,,,,,""
+2022-04-05 09:32:10.519 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,56,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ADD ""submitter"" character varying(255)",,,,,,,,,""
+2022-04-05 09:32:10.520 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,57,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: 
+            UPDATE loc_metadata_item item
+            SET submitter = (SELECT owner_address FROM loc_request request where item.request_id = request.id )
+        ",,,,,,,,,""
+2022-04-05 09:32:10.520 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,58,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""public"".""loc_metadata_item"" ALTER COLUMN ""submitter"" SET NOT NULL",,,,,,,,,""
+2022-04-05 09:32:10.521 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,59,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1641978274519', $2 = 'AddItemSubmitter1641978274519'",,,,,,,,""
+2022-04-05 09:32:10.521 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,60,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""collection_item"" (""collection_loc_id"" uuid NOT NULL, ""item_id"" character varying NOT NULL, ""added_on"" TIMESTAMP NOT NULL, CONSTRAINT ""PK_collection_item"" PRIMARY KEY (""collection_loc_id"", ""item_id""))",,,,,,,,,""
+2022-04-05 09:32:10.524 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,61,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1645008390776', $2 = 'AddCollection1645008390776'",,,,,,,,""
+2022-04-05 09:32:10.525 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,62,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: CREATE TABLE ""vault_transfer_request""
+                                 (
+                                     ""id""                uuid                   NOT NULL,
+                                     ""created_on""        TIMESTAMP,
+                                     ""requester_address"" character varying(255) NOT NULL,
+                                     ""origin""            character varying(255) NOT NULL,
+                                     ""destination""       character varying(255) NOT NULL,
+                                     ""amount""            numeric(50)            NOT NULL,
+                                     ""block_number""      bigint                 NOT NULL,
+                                     ""extrinsic_index""   integer                NOT NULL,
+                                     ""status""            character varying(255) NOT NULL,
+                                     ""decision_on""       TIMESTAMP,
+                                     ""reject_reason""     character varying(255),
+                                     CONSTRAINT ""UQ_vault_transfer_request_block_number_extrinsic_index"" UNIQUE (""block_number"", ""extrinsic_index""),
+                                     CONSTRAINT ""PK_vault_transfer_request"" PRIMARY KEY (""id"")
+                                 )",,,,,,,,,""
+2022-04-05 09:32:10.528 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,63,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1646830695574', $2 = 'AddVaultTransfer1646830695574'",,,,,,,,""
+2022-04-05 09:32:10.529 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,64,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""transaction"" ADD ""id"" uuid NOT NULL DEFAULT gen_random_uuid()",,,,,,,,,""
+2022-04-05 09:32:10.532 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,65,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""transaction"" DROP CONSTRAINT ""PK_transaction""",,,,,,,,,""
+2022-04-05 09:32:10.532 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,66,"idle in transaction",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"statement: ALTER TABLE ""transaction"" ADD CONSTRAINT ""PK_transaction"" PRIMARY KEY (""id"")",,,,,,,,,""
+2022-04-05 09:32:10.534 GMT,"postgres","postgres",87,"172.30.0.4:37724",624c0c9a.57,67,"INSERT",2022-04-05 09:32:10 GMT,3/9,490,LOG,00000,"execute <unnamed>: INSERT INTO ""migrations""(""timestamp"", ""name"") VALUES ($1, $2)","parameters: $1 = '1647428322698', $2 = 'ChangeTransactionPrimaryKey1647428322698'",,,,,,,,""
+2022-04-05 09:32:29.882 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,1,"INSERT",2022-04-05 09:32:11 GMT,3/17,0,LOG,00000,"execute <unnamed>: INSERT INTO ""sync_point""(""name"", ""latest_head_block_number"", ""updated_on"") VALUES ($1, $2, $3)","parameters: $1 = 'Transaction', $2 = '1', $3 = '2022-04-05 09:32:29.876'",,,,,,,,""
+2022-04-05 09:32:35.876 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,2,"UPDATE",2022-04-05 09:32:11 GMT,3/20,0,LOG,00000,"execute <unnamed>: UPDATE ""sync_point"" SET ""latest_head_block_number"" = $1, ""updated_on"" = $2 WHERE ""name"" IN ($3)","parameters: $1 = '2', $2 = '2022-04-05 09:32:35.87', $3 = 'Transaction'",,,,,,,,""
+2022-04-05 09:32:41.876 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,3,"UPDATE",2022-04-05 09:32:11 GMT,3/23,0,LOG,00000,"execute <unnamed>: UPDATE ""sync_point"" SET ""latest_head_block_number"" = $1, ""updated_on"" = $2 WHERE ""name"" IN ($3)","parameters: $1 = '3', $2 = '2022-04-05 09:32:41.871', $3 = 'Transaction'",,,,,,,,""
+2022-04-05 09:32:47.882 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,4,"UPDATE",2022-04-05 09:32:11 GMT,3/26,0,LOG,00000,"execute <unnamed>: UPDATE ""sync_point"" SET ""latest_head_block_number"" = $1, ""updated_on"" = $2 WHERE ""name"" IN ($3)","parameters: $1 = '4', $2 = '2022-04-05 09:32:47.879', $3 = 'Transaction'",,,,,,,,""
+2022-04-05 09:32:53.874 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,5,"UPDATE",2022-04-05 09:32:11 GMT,3/69,0,LOG,00000,"execute <unnamed>: UPDATE ""sync_point"" SET ""latest_head_block_number"" = $1, ""updated_on"" = $2 WHERE ""name"" IN ($3)","parameters: $1 = '5', $2 = '2022-04-05 09:32:53.871', $3 = 'Transaction'",,,,,,,,""
+2022-04-05 09:32:59.877 GMT,"postgres","postgres",88,"172.30.0.4:37726",624c0c9b.58,6,"UPDATE",2022-04-05 09:32:11 GMT,3/72,0,LOG,00000,"execute <unnamed>: UPDATE ""sync_point"" SET ""latest_head_block_number"" = $1, ""updated_on"" = $2 WHERE ""name"" IN ($3)","parameters: $1 = '6', $2 = '2022-04-05 09:32:59.873', $3 = 'Transaction'",,,,,,,,""
