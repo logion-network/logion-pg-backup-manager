@@ -6,7 +6,7 @@ import { SqlGenerator } from './SqlGenerator';
 
 export type SqlSink = (sql: string | undefined) => Promise<void>;
 
-export type FilePostProcessor = (sql: string | undefined) => Promise<void>;
+export type FilePostProcessor = (file: string) => Promise<void>;
 
 export class LogsProcessor {
 

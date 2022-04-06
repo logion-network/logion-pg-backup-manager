@@ -1,34 +1,39 @@
+import { mkdirSync } from "fs";
+import os from "os";
+import path from "path";
 import { AsyncTask, SimpleIntervalJob, ToadScheduler } from 'toad-scheduler';
 import dotenv from 'dotenv';
 
 import { getLogger } from './util/Log';
-import { LogsProcessor } from './LogsProcessor';
+import { BackupManager } from './BackupManager';
+import { NullFileManager } from './FileManager';
 
 dotenv.config()
 const logger = getLogger();
 
-const logsProcessor = new LogsProcessor({
-    sqlSink: (sql) => {
-        if(sql) {
-            console.log(sql);
-        }
-        return Promise.resolve();
-    },
-    filePostProcessor: () => Promise.resolve()
-});
-
-const logsDir = process.env.LOG_DIRECTORY;
-if(!logsDir) {
+const logDirectory = process.env.LOG_DIRECTORY;
+if(!logDirectory) {
     throw new Error("No logs directory given");
 }
 
-logger.info(`Scheduling processing of directory ${logsDir}...`);
+const workingDirectory = path.join(os.tmpdir(), "logion-pg-backup-manager");
+mkdirSync(workingDirectory, {recursive: true});
+
+const backupManager = new BackupManager({
+    fileManager: new NullFileManager(),
+    logDirectory,
+    password: "secret",
+    workingDirectory
+});
+
 let running = false;
 const processLogsDirectory = async () => {
     if (!running) {
         running = true;
         try {
-            await logsProcessor.process(logsDir);
+            const sequence = new Date().toISOString();
+            logger.info(`Triggering backup at ${sequence}...`);
+            await backupManager.trigger(sequence.toString());
         } catch (e: any) {
             logger.error(e.message);
             logger.debug(e.stack);
