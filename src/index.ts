@@ -1,8 +1,8 @@
 import { mkdirSync } from "fs";
 import os from "os";
 import path from "path";
-import { AsyncTask, SimpleIntervalJob, ToadScheduler } from 'toad-scheduler';
 import dotenv from 'dotenv';
+import schedule from 'node-schedule';
 
 import { getLogger } from './util/Log';
 import { BackupManager } from './BackupManager';
@@ -31,9 +31,9 @@ const processLogsDirectory = async () => {
     if (!running) {
         running = true;
         try {
-            const sequence = new Date().toISOString();
-            logger.info(`Triggering backup at ${sequence}...`);
-            await backupManager.trigger(sequence.toString());
+            const nowDate = now();
+            logger.info(`Triggering backup at ${nowDate.toISOString()}...`);
+            await backupManager.trigger(nowDate);
         } catch (e: any) {
             logger.error(e.message);
             logger.debug(e.stack);
@@ -45,16 +45,10 @@ const processLogsDirectory = async () => {
     }
 };
 
-const task = new AsyncTask(
-    'Process logs directory',
-    processLogsDirectory,
-    (err: Error) => {
-        running = false;
-        logger.error(err.message)
-        logger.debug(err.stack);
-    }
-);
-const job = new SimpleIntervalJob({ seconds: 1 }, task);
+function now(): Date {
+    const date = new Date();
+    date.setMilliseconds(0);
+    return date;
+}
 
-const scheduler = new ToadScheduler();
-scheduler.addSimpleIntervalJob(job);
+schedule.scheduleJob('* * * * * *', processLogsDirectory);

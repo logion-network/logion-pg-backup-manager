@@ -19,8 +19,8 @@ export class BackupManager {
 
     private configuration: BackupManagerConfiguration;
 
-    async trigger(sequenceString: string) {
-        const deltaFile = path.join(this.configuration.workingDirectory, `${sequenceString}-delta.sql.enc`);
+    async trigger(date: Date) {
+        const deltaFile = path.join(this.configuration.workingDirectory, `${date.toISOString()}-delta.sql.enc`);
         const writer = new EncryptedFileWriter(this.configuration.password);
         await writer.open(deltaFile);
         const logsProcessor = new LogsProcessor({

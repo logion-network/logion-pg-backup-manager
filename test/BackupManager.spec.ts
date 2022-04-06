@@ -22,7 +22,8 @@ describe("BackupManager", () => {
             password: "secret",
             workingDirectory
         });
-        await manager.trigger("1");
-        expect(existsSync(path.join(workingDirectory, "1-delta.sql.enc"))).toBe(true);
+        const now = new Date();
+        await manager.trigger(now);
+        expect(existsSync(path.join(workingDirectory, `${now.toISOString()}-delta.sql.enc`))).toBe(true);
     });
 });
