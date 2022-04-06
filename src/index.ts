@@ -5,8 +5,9 @@ import dotenv from 'dotenv';
 import schedule from 'node-schedule';
 
 import { getLogger } from './util/Log';
-import { BackupManager } from './BackupManager';
+import { BackupManager, FullDumpConfiguration } from './BackupManager';
 import { NullFileManager } from './FileManager';
+import { PosixShell } from "./Shell";
 
 dotenv.config()
 const logger = getLogger();
@@ -19,11 +20,20 @@ if(!logDirectory) {
 const workingDirectory = path.join(os.tmpdir(), "logion-pg-backup-manager");
 mkdirSync(workingDirectory, {recursive: true});
 
+const fullDumpConfiguration: FullDumpConfiguration = {
+    user: "postgres",
+    database: "postgres",
+    host: "localhost"
+};
+const shell = new PosixShell();
 const backupManager = new BackupManager({
     fileManager: new NullFileManager(),
     logDirectory,
     password: "secret",
-    workingDirectory
+    workingDirectory,
+    fullBackupSchedule: "* * 0 * * *",
+    fullDumpConfiguration,
+    shell
 });
 
 let running = false;
@@ -51,4 +61,4 @@ function now(): Date {
     return date;
 }
 
-schedule.scheduleJob('* * * * * *', processLogsDirectory);
+schedule.scheduleJob('* 0 * * * *', processLogsDirectory);
