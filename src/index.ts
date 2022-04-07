@@ -1,8 +1,9 @@
+import dotenv from 'dotenv';
 import { mkdirSync } from "fs";
+import { DateTime, Duration } from "luxon";
+import schedule from 'node-schedule';
 import os from "os";
 import path from "path";
-import dotenv from 'dotenv';
-import schedule from 'node-schedule';
 
 import { getLogger } from './util/Log';
 import { BackupManager, FullDumpConfiguration } from './BackupManager';
@@ -31,9 +32,10 @@ const backupManager = new BackupManager({
     logDirectory,
     password: "secret",
     workingDirectory,
-    fullBackupSchedule: "* * 0 * * *",
+    maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
     fullDumpConfiguration,
-    shell
+    shell,
+    journalFile: path.join(workingDirectory, 'journal')
 });
 
 let running = false;
@@ -41,9 +43,9 @@ const processLogsDirectory = async () => {
     if (!running) {
         running = true;
         try {
-            const nowDate = now();
-            logger.info(`Triggering backup at ${nowDate.toISOString()}...`);
-            await backupManager.trigger(nowDate);
+            const now = DateTime.now().set({millisecond: 0});
+            logger.info(`Triggering backup at ${now.toISO()}...`);
+            await backupManager.trigger(now);
         } catch (e: any) {
             logger.error(e.message);
             logger.debug(e.stack);
@@ -55,10 +57,4 @@ const processLogsDirectory = async () => {
     }
 };
 
-function now(): Date {
-    const date = new Date();
-    date.setMilliseconds(0);
-    return date;
-}
-
-schedule.scheduleJob('* 0 * * * *', processLogsDirectory);
+schedule.scheduleJob('* * * * * *', processLogsDirectory); // Every hour

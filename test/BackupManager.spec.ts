@@ -1,11 +1,13 @@
 import { existsSync, openSync, closeSync } from "fs";
-import { mkdir, rm } from "fs/promises";
+import { mkdir, open, rm } from "fs/promises";
+import { DateTime, Duration } from "luxon";
 import { Mock } from 'moq.ts';
 import os from "os";
 import path from "path";
 
 import { BackupManager, FullDumpConfiguration } from "../src/BackupManager";
 import { NullFileManager } from "../src/FileManager";
+import { BackupFileName } from "../src/Journal";
 import { Shell, ShellExecResult } from "../src/Shell";
 
 const workingDirectory = path.join(os.tmpdir(), "backup-manager-test");
@@ -15,6 +17,7 @@ const fullDumpConfiguration: FullDumpConfiguration = {
     host: "localhost"
 };
 const shell = new Mock<Shell>();
+const journalFile = path.join(workingDirectory, "journal");
 
 describe("BackupManager", () => {
 
@@ -24,47 +27,68 @@ describe("BackupManager", () => {
     });
 
     it("creates delta", async () => {
+        let now = DateTime.now();
+        await addFullBackupToJournal(now.minus({hours: 1}));
         const fileManager = new NullFileManager();
         const manager = new BackupManager({
             fileManager,
             logDirectory: "sample_logs",
             password: "secret",
             workingDirectory,
-            fullBackupSchedule: "* 0 * * *",
+            maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
             fullDumpConfiguration,
-            shell: shell.object()
+            shell: shell.object(),
+            journalFile
         });
-        const now = new Date();
-        if(now.getUTCHours() === 0) {
-            now.setUTCHours(1);
-        }
         await manager.trigger(now);
-        expect(existsSync(path.join(workingDirectory, `${now.toISOString()}-delta.sql.enc`))).toBe(true);
+        expect(existsSync(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName))).toBe(true);
     });
 
-    it("creates full", async () => {
-        const fileManager = new NullFileManager();
-        shell.setup(instance => instance.exec).returns(fullBackupExecMock);
-        const manager = new BackupManager({
-            fileManager,
-            logDirectory: "sample_logs",
-            password: "secret",
-            workingDirectory,
-            fullBackupSchedule: "* 0 * * *",
-            fullDumpConfiguration,
-            shell: shell.object()
-        });
-        const now = new Date();
-        if(now.getUTCHours() !== 0) {
-            now.setUTCHours(0);
-        }
-        await manager.trigger(now);
-        expect(existsSync(path.join(workingDirectory, `${now.toISOString()}-full.sql.enc`))).toBe(true);
+    it("creates full with empty journal", async () => {
+        await clearJournal();
+        let now = DateTime.now();
+        await testCreatesFullBackup(now);
+    });
+
+    it("creates full with too old full backup", async () => {
+        let now = DateTime.now();
+        await addFullBackupToJournal(now.minus({hours: 25}));
+        await testCreatesFullBackup(now);
     });
 });
 
+async function addFullBackupToJournal(date: DateTime) {
+    const file = await open(journalFile, 'w');
+    const cid = "cid0";
+    const fileName = BackupFileName.getFullBackupFileName(date).fileName;
+    await file.write(Buffer.from(`${cid} ${fileName}\n`));
+    await file.close();
+}
+
+async function clearJournal() {
+    const file = await open(journalFile, 'w');
+    await file.close();
+}
+
+async function testCreatesFullBackup(now: DateTime) {
+    const fileManager = new NullFileManager();
+    shell.setup(instance => instance.exec).returns(fullBackupExecMock);
+    const manager = new BackupManager({
+        fileManager,
+        logDirectory: "sample_logs",
+        password: "secret",
+        workingDirectory,
+        maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
+        fullDumpConfiguration,
+        shell: shell.object(),
+        journalFile
+    });
+    await manager.trigger(now);
+    expect(existsSync(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).toBe(true);
+}
+
 function fullBackupExecMock(command: string): Promise<ShellExecResult> {
-    const expectedCommandPrefix = "pg_dump -F c -h localhost -U postgres postgres | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -pass pass:secret > ";
+    const expectedCommandPrefix = "set -eo pipefail && pg_dump -F c -h localhost -U postgres postgres | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -pass pass:secret > ";
     if(command.startsWith(expectedCommandPrefix)) {
         const fileName = command.substring(expectedCommandPrefix.length);
 

@@ -1,10 +1,14 @@
-import path from "path";
 import cronParser, { SixtyRange, HourRange, DayOfTheMonthRange, MonthRange, DayOfTheWeekRange } from 'cron-parser';
+import { constants } from "fs";
+import { access } from "fs/promises";
+import { DateTime, Duration } from "luxon";
+import path from "path";
 
 import { EncryptedFileWriter } from './EncryptedFile';
 import { FileManager } from "./FileManager";
 import { LogsProcessor } from "./LogsProcessor";
 import { Shell } from "./Shell";
+import { BackupFile, BackupFileName, Journal } from "./Journal";
 
 export interface FullDumpConfiguration {
     host: string;
@@ -17,9 +21,10 @@ export interface BackupManagerConfiguration {
     logDirectory: string;
     fileManager: FileManager;
     password: string;
-    fullBackupSchedule: string;
+    maxDurationSinceLastFullBackup: Duration;
     shell: Shell;
     fullDumpConfiguration: FullDumpConfiguration;
+    journalFile: string;
 }
 
 export class BackupManager {
@@ -30,17 +35,43 @@ export class BackupManager {
 
     private configuration: BackupManagerConfiguration;
 
-    async trigger(date: Date) {
-        let backupFile: string;
-        if(this.matches(this.configuration.fullBackupSchedule, date)) {
-            backupFile = path.join(this.configuration.workingDirectory, `${date.toISOString()}-full.sql.enc`);
-            const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
-            const dumpCommand = `pg_dump -F c -h ${fullDumpConfiguration.host} -U ${fullDumpConfiguration.user} ${fullDumpConfiguration.database} | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -pass pass:${this.configuration.password} > ${backupFile}`;
-            await this.configuration.shell.exec(dumpCommand);
+    async trigger(date: DateTime) {
+        let journal: Journal;
+        try {
+            await access(this.configuration.journalFile, constants.F_OK);
+            journal = await Journal.read(this.configuration.journalFile);
+        } catch {
+            journal = new Journal();
+        }
+
+        let backupFile: BackupFileName;
+        let backupFilePath: string;
+        if(journal.isEmpty()
+                || date.diff(journal.getLastFullBackup()!.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
+            backupFile = BackupFileName.getFullBackupFileName(date);
+            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
+            await this.doFullBackup(backupFilePath);
         } else {
-            backupFile = path.join(this.configuration.workingDirectory, `${date.toISOString()}-delta.sql.enc`);
-            const writer = new EncryptedFileWriter(this.configuration.password);
-            await writer.open(backupFile);
+            backupFile = BackupFileName.getDeltaBackupFileName(date);
+            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
+            await this.doDeltaBackup(backupFilePath);
+        }
+
+        const cid = await this.configuration.fileManager.moveToIpfs(backupFile.fileName);
+
+        journal.addBackup(new BackupFile({cid, fileName: backupFile}));
+        await journal.write(this.configuration.journalFile);
+    }
+
+    private async doFullBackup(backupFilePath: string) {
+        const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
+        const dumpCommand = `set -eo pipefail && pg_dump -F c -h ${fullDumpConfiguration.host} -U ${fullDumpConfiguration.user} ${fullDumpConfiguration.database} | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -pass pass:${this.configuration.password} > ${backupFilePath}`;
+        await this.configuration.shell.exec(dumpCommand);
+    }
+
+    private async doDeltaBackup(backupFilePath: string) {
+        const writer = new EncryptedFileWriter(this.configuration.password);
+            await writer.open(backupFilePath);
             const logsProcessor = new LogsProcessor({
                 sqlSink: async (sql) => {
                     if(sql) {
@@ -53,12 +84,9 @@ export class BackupManager {
             });
             await logsProcessor.process(this.configuration.logDirectory);
             await writer.close();
-        }
-
-        await this.configuration.fileManager.moveToIpfs(backupFile);
     }
 
-    private matches(expression: string, date: Date): boolean {
+    private matches(expression: string, date: DateTime): boolean {
         const {
             minute,
             hour,
@@ -68,11 +96,11 @@ export class BackupManager {
         } = cronParser.parseExpression(expression).fields;
 
         if (
-            minute.includes(date.getUTCMinutes() as SixtyRange) &&
-            hour.includes(date.getUTCHours() as HourRange) &&
-            dayOfMonth.includes(date.getUTCDate() as DayOfTheMonthRange) &&
-            month.includes(date.getUTCMonth() as MonthRange) &&
-            dayOfWeek.includes(date.getUTCDay() as DayOfTheWeekRange)
+            minute.includes(date.minute as SixtyRange) &&
+            hour.includes(date.hour as HourRange) &&
+            dayOfMonth.includes(date.day as DayOfTheMonthRange) &&
+            month.includes(date.month as MonthRange) &&
+            dayOfWeek.includes(date.weekday as DayOfTheWeekRange)
         ) {
             return true
         } else {

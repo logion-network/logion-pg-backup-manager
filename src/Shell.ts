@@ -14,7 +14,7 @@ export class PosixShell extends Shell {
 
     async exec(command: string): Promise<ShellExecResult> {
         return new Promise<ShellExecResult>((resolve, reject) => {
-            exec(command, (error, stdout, stderr) => {
+            exec(command, { shell: '/bin/bash' }, (error, stdout, stderr) => {
                 if (error) {
                     reject(error);
                 } else {
