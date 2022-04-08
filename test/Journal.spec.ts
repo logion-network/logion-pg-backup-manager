@@ -17,6 +17,13 @@ describe("BackupFileName", () => {
         expect(fileName.type).toEqual('DELTA');
     });
 
+    it("parses full backup legacy file name", () => {
+        const dateTime = DateTime.now();
+        const fileName = BackupFileName.parse(`dump_${dateTime.toISODate()}-01-00-01.sql.enc`);
+        expect(fileName.date).toEqual(DateTime.fromISO(dateTime.toISODate(), {zone: 'utc'}));
+        expect(fileName.type).toEqual('FULL_LEGACY');
+    });
+
     it("generates full backup file name", () => {
         const date = DateTime.now();
         const backupFileName = new BackupFileName({
@@ -62,11 +69,7 @@ describe("Journal", () => {
             })
         ];
 
-        let i = 0;
-        for(const backupFile of journal) {
-            expect(backupFile).toEqual(expectedBackupFiles[i]);
-            ++i;
-        }
+        expectJournalToHaveExpectedFiles(journal, expectedBackupFiles);
     });
 
     it("finds last full backup", async () => {
@@ -80,4 +83,34 @@ describe("Journal", () => {
 
         expect(journal.getLastFullBackup()).toEqual(expectedBackupFile);
     });
+
+    it("reads legacy entries", async () => {
+        const journal = await Journal.read("test/legacy_journal.txt");
+        expect(journal.isEmpty()).toBe(false);
+
+        const expectedBackupFiles = [
+            new BackupFile({
+                cid: "cid0",
+                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-07T00:00:00.000", {zone: 'utc'}))
+            }),
+            new BackupFile({
+                cid: "cid1",
+                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-08T00:00:00.000", {zone: 'utc'}))
+            }),
+            new BackupFile({
+                cid: "cid2",
+                fileName: BackupFileName.getDeltaBackupFileName(DateTime.fromISO("2022-04-09T14:57:14.326+02:00"))
+            })
+        ];
+
+        expectJournalToHaveExpectedFiles(journal, expectedBackupFiles);
+    });
 });
+
+function expectJournalToHaveExpectedFiles(journal: Journal, expectedBackupFiles: BackupFile[]) {
+    let i = 0;
+    for(const backupFile of journal) {
+        expect(backupFile).toEqual(expectedBackupFiles[i]);
+        ++i;
+    }
+}

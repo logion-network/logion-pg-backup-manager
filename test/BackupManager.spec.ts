@@ -55,6 +55,12 @@ describe("BackupManager", () => {
         await addFullBackupToJournal(now.minus({hours: 25}));
         await testCreatesFullBackup(now);
     });
+
+    it("creates full with only legacy backup", async () => {
+        let now = DateTime.now();
+        await addFullLegacyBackupToJournal(now);
+        await testCreatesFullBackup(now);
+    });
 });
 
 async function addFullBackupToJournal(date: DateTime) {
@@ -101,4 +107,12 @@ function fullBackupExecMock(command: string): Promise<ShellExecResult> {
     } else {
         return Promise.reject(new Error());
     }
+}
+
+async function addFullLegacyBackupToJournal(date: DateTime) {
+    const file = await open(journalFile, 'w');
+    const cid = "cid0";
+    const fileName = BackupFileName.getLegacyFullBackupFileName(date).fileName;
+    await file.write(Buffer.from(`added ${cid} ${fileName}\n`));
+    await file.close();
 }

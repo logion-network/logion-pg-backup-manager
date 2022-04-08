@@ -46,8 +46,9 @@ export class BackupManager {
 
         let backupFile: BackupFileName;
         let backupFilePath: string;
-        if(journal.isEmpty()
-                || date.diff(journal.getLastFullBackup()!.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
+        const lastFullBackup = journal.getLastFullBackup();
+        if(lastFullBackup === undefined
+                || date.diff(lastFullBackup.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
             backupFile = BackupFileName.getFullBackupFileName(date);
             backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
             await this.doFullBackup(backupFilePath);
@@ -84,27 +85,5 @@ export class BackupManager {
             });
             await logsProcessor.process(this.configuration.logDirectory);
             await writer.close();
-    }
-
-    private matches(expression: string, date: DateTime): boolean {
-        const {
-            minute,
-            hour,
-            dayOfMonth,
-            month,
-            dayOfWeek
-        } = cronParser.parseExpression(expression).fields;
-
-        if (
-            minute.includes(date.minute as SixtyRange) &&
-            hour.includes(date.hour as HourRange) &&
-            dayOfMonth.includes(date.day as DayOfTheMonthRange) &&
-            month.includes(date.month as MonthRange) &&
-            dayOfWeek.includes(date.weekday as DayOfTheWeekRange)
-        ) {
-            return true
-        } else {
-            return false;
-        }
     }
 }

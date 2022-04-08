@@ -1,11 +1,15 @@
 import { open } from 'fs/promises';
-import { DateTime } from 'luxon';
+import { DateTime, Zone } from 'luxon';
 
 const FULL_BACKUP_FILE_NAME_SUFFIX = "-full.sql.enc";
 
 const DELTA_BACKUP_FILE_NAME_SUFFIX = "-delta.sql.enc";
 
-export type BackupFileNameType = 'FULL' | 'DELTA';
+const FULL_LEGACY_BACKUP_FILE_NAME_PREFIX = "dump_";
+
+const LEGACY_DATE_LENGTH = 'YYYY-MM-DD'.length;
+
+export type BackupFileNameType = 'FULL' | 'DELTA' | 'FULL_LEGACY';
 
 export class BackupFileName {
 
@@ -23,6 +27,13 @@ export class BackupFileName {
         });
     }
 
+    static getLegacyFullBackupFileName(date: DateTime): BackupFileName {
+        return new BackupFileName({
+            date: date,
+            type: 'FULL_LEGACY'
+        });
+    }
+
     static parse(fileName: string): BackupFileName {
         if(fileName.endsWith(FULL_BACKUP_FILE_NAME_SUFFIX)) {
             const dateString = fileName.substring(0, fileName.length - FULL_BACKUP_FILE_NAME_SUFFIX.length);
@@ -35,6 +46,12 @@ export class BackupFileName {
             return new BackupFileName({
                 date: DateTime.fromISO(dateString),
                 type: 'DELTA'
+            });
+        } else if(fileName.startsWith(FULL_LEGACY_BACKUP_FILE_NAME_PREFIX)) {
+            const dateString = fileName.substring(FULL_LEGACY_BACKUP_FILE_NAME_PREFIX.length, FULL_LEGACY_BACKUP_FILE_NAME_PREFIX.length + LEGACY_DATE_LENGTH);
+            return new BackupFileName({
+                date: DateTime.fromISO(dateString, {zone: 'utc'}),
+                type: 'FULL_LEGACY'
             });
         } else {
             throw new Error("Bad file name format");
@@ -92,6 +109,13 @@ export class Journal implements Iterable<BackupFile> {
             if(elements.length === 2) {
                 const cid = elements[0];
                 const fileName = BackupFileName.parse(elements[1]);
+                journal.addBackup(new BackupFile({
+                    cid,
+                    fileName
+                }));
+            } else if(elements.length === 3) {
+                const cid = elements[1];
+                const fileName = BackupFileName.parse(elements[2]);
                 journal.addBackup(new BackupFile({
                     cid,
                     fileName
