@@ -8,23 +8,26 @@ import { FileManager } from "./FileManager";
 import { LogsProcessor } from "./LogsProcessor";
 import { ProcessHandler, Shell } from "./Shell";
 import { BackupFile, BackupFileName, Journal } from "./Journal";
+import { Mailer } from "./Mailer";
 
 export interface FullDumpConfiguration {
-    host: string;
-    user: string;
-    database: string;
+    readonly host: string;
+    readonly user: string;
+    readonly database: string;
 }
 
 export interface BackupManagerConfiguration {
-    workingDirectory: string;
-    logDirectory: string;
-    fileManager: FileManager;
-    password: string;
-    maxDurationSinceLastFullBackup: Duration;
-    shell: Shell;
-    fullDumpConfiguration: FullDumpConfiguration;
-    journalFile: string;
-    maxFullBackups: number;
+    readonly workingDirectory: string;
+    readonly logDirectory: string;
+    readonly fileManager: FileManager;
+    readonly password: string;
+    readonly maxDurationSinceLastFullBackup: Duration;
+    readonly shell: Shell;
+    readonly fullDumpConfiguration: FullDumpConfiguration;
+    readonly journalFile: string;
+    readonly maxFullBackups: number;
+    readonly mailer: Mailer;
+    readonly mailTo: string;
 }
 
 export class BackupManager {
@@ -33,7 +36,7 @@ export class BackupManager {
         this.configuration = configuration;
     }
 
-    private configuration: BackupManagerConfiguration;
+    readonly configuration: BackupManagerConfiguration;
 
     async trigger(date: DateTime) {
         let journal: Journal;
@@ -68,6 +71,18 @@ export class BackupManager {
         }
 
         await journal.write(this.configuration.journalFile);
+
+        await this.configuration.mailer.sendMail({
+            to: this.configuration.mailTo,
+            subject: "Backup journal updated",
+            text: "New journal file available, see attachment.",
+            attachments: [
+                {
+                    path: this.configuration.journalFile,
+                    filename: "journal.txt"
+                }
+            ]
+        });
     }
 
     private async doFullBackup(backupFilePath: string) {

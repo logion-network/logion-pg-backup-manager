@@ -7,6 +7,8 @@ import path from "path";
 import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from "../src/BackupManager";
 import { FileManager } from "../src/FileManager";
 import { BackupFileName } from "../src/Journal";
+import { Mailer, MailMessage } from "../src/Mailer";
+import { ParametersExtractor } from "../src/ParametersExtractor";
 import { ProcessHandler, Shell } from "../src/Shell";
 
 const workingDirectory = path.join(os.tmpdir(), "backup-manager-test");
@@ -17,9 +19,11 @@ const fullDumpConfiguration: FullDumpConfiguration = {
 };
 const shell = new Mock<Shell>();
 const journalFile = path.join(workingDirectory, "journal");
-let fileManager = new Mock<FileManager>();
+let fileManager: Mock<FileManager>;
 let backupManagerConfiguration: BackupManagerConfiguration;
 const cid = "cid0";
+let mailer: Mock<Mailer>;
+const mailTo = "john.doe@logion.network";
 
 describe("BackupManager", () => {
 
@@ -30,6 +34,10 @@ describe("BackupManager", () => {
 
     beforeEach(() => {
         fileManager = new Mock<FileManager>();
+
+        mailer = new Mock<Mailer>();
+        mailer.setup(instance => instance.sendMail(It.IsAny())).returns(Promise.resolve());
+
         backupManagerConfiguration = {
             fileManager: fileManager.object(),
             logDirectory: "sample_logs",
@@ -39,7 +47,9 @@ describe("BackupManager", () => {
             fullDumpConfiguration,
             shell: shell.object(),
             journalFile,
-            maxFullBackups: 1
+            maxFullBackups: 1,
+            mailer: mailer.object(),
+            mailTo
         };
     });
 
@@ -55,6 +65,8 @@ describe("BackupManager", () => {
         fileManager.verify(instance => instance.moveToIpfs(BackupFileName.getDeltaBackupFileName(now).fileName), Times.Once());
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.csv'))), Times.Exactly(8));
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.log'))), Times.Exactly(8));
+
+        verifyMailSent();
     });
 
     it("creates full with empty journal", async () => {
@@ -85,6 +97,18 @@ async function addFullBackupToJournal(date: DateTime): Promise<string> {
     return path.join(workingDirectory, fileName);
 }
 
+function verifyMailSent() {
+    mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(param =>
+        param.to === mailTo
+        && param.subject === "Backup journal updated"
+        && param.text !== undefined
+        && param.attachments !== undefined
+        && param.attachments.length === 1
+        && param.attachments[0].path === journalFile
+        && param.attachments[0].filename === "journal.txt"
+    )), Times.Exactly(1));
+}
+
 async function clearJournal() {
     const file = await open(journalFile, 'w');
     await file.close();
@@ -104,6 +128,8 @@ async function testCreatesFullBackup(now: DateTime, removedBackupFileName?: stri
     if(removedBackupFileName) {
         fileManager.verify(instance => instance.removeFileFromIpfs(removedBackupFileName), Times.Once());
     }
+
+    verifyMailSent();
 }
 
 function fullBackupSpawnMock(command: string, parameters: string[], handler: ProcessHandler): Promise<void> {
