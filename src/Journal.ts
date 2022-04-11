@@ -154,6 +154,48 @@ export class Journal implements Iterable<BackupFile> {
         return undefined;
     }
 
+    keepOnlyLastFullBackups(maxFullBackups: number): BackupFile[] {
+        if(this.backupFiles.length === 0) {
+            return [];
+        } else {
+            let fullBackupIndex = this.getPreviousFullBackup(this.backupFiles.length - 1);
+
+            let fullBackups;
+            if(fullBackupIndex > 0) {
+                fullBackups = 1;
+            } else {
+                fullBackups = 0;
+            }
+
+            while(fullBackupIndex >= 0 && fullBackups < maxFullBackups) {
+                fullBackupIndex = this.getPreviousFullBackup(fullBackupIndex - 1);
+                if(fullBackupIndex > 0) {
+                    ++fullBackups;
+                }
+            }
+
+            if(fullBackupIndex > 0) {
+                const toRemove = this.backupFiles.slice(0, fullBackupIndex);
+                this.backupFiles = this.backupFiles.slice(fullBackupIndex);
+                return toRemove;
+            } else {
+                return [];
+            }
+        }
+    }
+
+    private getPreviousFullBackup(current: number): number {
+        let next = current;
+        while(next >= 0 && this.backupFiles[next].fileName.type === 'DELTA') {
+            --next;
+        }
+        if(next === 0 && this.backupFiles[next].fileName.type === 'DELTA') {
+            return -1;
+        } else {
+            return next;
+        }
+    }
+
     [Symbol.iterator](): Iterator<BackupFile, BackupFile> {
         return this.backupFiles[Symbol.iterator]();
     }

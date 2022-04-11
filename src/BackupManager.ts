@@ -1,4 +1,3 @@
-import cronParser, { SixtyRange, HourRange, DayOfTheMonthRange, MonthRange, DayOfTheWeekRange } from 'cron-parser';
 import { constants } from "fs";
 import { access } from "fs/promises";
 import { DateTime, Duration } from "luxon";
@@ -25,6 +24,7 @@ export interface BackupManagerConfiguration {
     shell: Shell;
     fullDumpConfiguration: FullDumpConfiguration;
     journalFile: string;
+    maxFullBackups: number;
 }
 
 export class BackupManager {
@@ -61,6 +61,12 @@ export class BackupManager {
         const cid = await this.configuration.fileManager.moveToIpfs(backupFile.fileName);
 
         journal.addBackup(new BackupFile({cid, fileName: backupFile}));
+
+        const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
+        for(const file of toRemove) {
+            this.configuration.fileManager.removeFileFromIpfs(path.join(this.configuration.workingDirectory, file.fileName.fileName));
+        }
+
         await journal.write(this.configuration.journalFile);
     }
 

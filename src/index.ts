@@ -35,7 +35,8 @@ const backupManager = new BackupManager({
     maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
     fullDumpConfiguration,
     shell,
-    journalFile: path.join(workingDirectory, 'journal')
+    journalFile: path.join(workingDirectory, 'journal'),
+    maxFullBackups: 30
 });
 
 let running = false;

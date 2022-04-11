@@ -1,12 +1,12 @@
-import { existsSync, openSync, closeSync } from "fs";
+import { openSync, closeSync } from "fs";
 import { mkdir, open, rm } from "fs/promises";
 import { DateTime, Duration } from "luxon";
-import { Mock } from 'moq.ts';
+import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, FullDumpConfiguration } from "../src/BackupManager";
-import { NullFileManager } from "../src/FileManager";
+import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from "../src/BackupManager";
+import { FileManager } from "../src/FileManager";
 import { BackupFileName } from "../src/Journal";
 import { Shell, ShellExecResult } from "../src/Shell";
 
@@ -18,6 +18,9 @@ const fullDumpConfiguration: FullDumpConfiguration = {
 };
 const shell = new Mock<Shell>();
 const journalFile = path.join(workingDirectory, "journal");
+let fileManager = new Mock<FileManager>();
+let backupManagerConfiguration: BackupManagerConfiguration;
+const cid = "cid0";
 
 describe("BackupManager", () => {
 
@@ -26,22 +29,33 @@ describe("BackupManager", () => {
         await mkdir(workingDirectory, {recursive: true});
     });
 
-    it("creates delta", async () => {
-        let now = DateTime.now();
-        await addFullBackupToJournal(now.minus({hours: 1}));
-        const fileManager = new NullFileManager();
-        const manager = new BackupManager({
-            fileManager,
+    beforeEach(() => {
+        fileManager = new Mock<FileManager>();
+        backupManagerConfiguration = {
+            fileManager: fileManager.object(),
             logDirectory: "sample_logs",
             password: "secret",
             workingDirectory,
             maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
             fullDumpConfiguration,
             shell: shell.object(),
-            journalFile
-        });
+            journalFile,
+            maxFullBackups: 1
+        };
+    });
+
+    it("creates delta", async () => {
+        let now = DateTime.now();
+        await addFullBackupToJournal(now.minus({hours: 1}));
+        const manager = new BackupManager(backupManagerConfiguration);
+        fileManager.setup(instance => instance.moveToIpfs(BackupFileName.getDeltaBackupFileName(now).fileName)).returns(Promise.resolve(cid));
+        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+
         await manager.trigger(now);
-        expect(existsSync(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName))).toBe(true);
+
+        fileManager.verify(instance => instance.moveToIpfs(BackupFileName.getDeltaBackupFileName(now).fileName), Times.Once());
+        fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.csv'))), Times.Exactly(8));
+        fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.log'))), Times.Exactly(8));
     });
 
     it("creates full with empty journal", async () => {
@@ -52,23 +66,24 @@ describe("BackupManager", () => {
 
     it("creates full with too old full backup", async () => {
         let now = DateTime.now();
-        await addFullBackupToJournal(now.minus({hours: 25}));
-        await testCreatesFullBackup(now);
+        const fileName = await addFullBackupToJournal(now.minus({hours: 25}));
+        await testCreatesFullBackup(now, fileName);
     });
 
     it("creates full with only legacy backup", async () => {
         let now = DateTime.now();
-        await addFullLegacyBackupToJournal(now);
-        await testCreatesFullBackup(now);
+        const fileName = await addFullLegacyBackupToJournal(now);
+        await testCreatesFullBackup(now, fileName);
     });
 });
 
-async function addFullBackupToJournal(date: DateTime) {
+async function addFullBackupToJournal(date: DateTime): Promise<string> {
     const file = await open(journalFile, 'w');
     const cid = "cid0";
     const fileName = BackupFileName.getFullBackupFileName(date).fileName;
     await file.write(Buffer.from(`${cid} ${fileName}\n`));
     await file.close();
+    return path.join(workingDirectory, fileName);
 }
 
 async function clearJournal() {
@@ -76,21 +91,20 @@ async function clearJournal() {
     await file.close();
 }
 
-async function testCreatesFullBackup(now: DateTime) {
-    const fileManager = new NullFileManager();
+async function testCreatesFullBackup(now: DateTime, removedBackupFileName?: string) {
     shell.setup(instance => instance.exec).returns(fullBackupExecMock);
-    const manager = new BackupManager({
-        fileManager,
-        logDirectory: "sample_logs",
-        password: "secret",
-        workingDirectory,
-        maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
-        fullDumpConfiguration,
-        shell: shell.object(),
-        journalFile
-    });
+    fileManager.setup(instance => instance.moveToIpfs(BackupFileName.getFullBackupFileName(now).fileName)).returns(Promise.resolve(cid));
+    if(removedBackupFileName) {
+        fileManager.setup(instance => instance.removeFileFromIpfs(removedBackupFileName)).returns(Promise.resolve());
+    }
+
+    const manager = new BackupManager(backupManagerConfiguration);
     await manager.trigger(now);
-    expect(existsSync(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).toBe(true);
+
+    fileManager.verify(instance => instance.moveToIpfs(BackupFileName.getFullBackupFileName(now).fileName), Times.Once());
+    if(removedBackupFileName) {
+        fileManager.verify(instance => instance.removeFileFromIpfs(removedBackupFileName), Times.Once());
+    }
 }
 
 function fullBackupExecMock(command: string): Promise<ShellExecResult> {
@@ -109,10 +123,11 @@ function fullBackupExecMock(command: string): Promise<ShellExecResult> {
     }
 }
 
-async function addFullLegacyBackupToJournal(date: DateTime) {
+async function addFullLegacyBackupToJournal(date: DateTime): Promise<string> {
     const file = await open(journalFile, 'w');
     const cid = "cid0";
     const fileName = BackupFileName.getLegacyFullBackupFileName(date).fileName;
     await file.write(Buffer.from(`added ${cid} ${fileName}\n`));
     await file.close();
+    return path.join(workingDirectory, fileName);
 }
