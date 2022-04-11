@@ -6,7 +6,7 @@ import path from "path";
 import { EncryptedFileWriter } from './EncryptedFile';
 import { FileManager } from "./FileManager";
 import { LogsProcessor } from "./LogsProcessor";
-import { Shell } from "./Shell";
+import { ProcessHandler, Shell } from "./Shell";
 import { BackupFile, BackupFileName, Journal } from "./Journal";
 
 export interface FullDumpConfiguration {
@@ -71,25 +71,48 @@ export class BackupManager {
     }
 
     private async doFullBackup(backupFilePath: string) {
+        const writer = new EncryptedFileWriter(this.configuration.password);
+        await writer.open(backupFilePath);
+        const pgDumpHandler = new PgDumpProcessHandler(writer);
         const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
-        const dumpCommand = `set -eo pipefail && pg_dump -F c -h ${fullDumpConfiguration.host} -U ${fullDumpConfiguration.user} ${fullDumpConfiguration.database} | openssl enc -aes-256-cbc -md sha512 -pbkdf2 -iter 100000 -pass pass:${this.configuration.password} > ${backupFilePath}`;
-        await this.configuration.shell.exec(dumpCommand);
+        const parameters = [
+            '-F', 'c',
+            '-h', fullDumpConfiguration.host,
+            '-U', fullDumpConfiguration.user,
+            fullDumpConfiguration.database
+        ];
+        await this.configuration.shell.spawn("pg_dump", parameters, pgDumpHandler);
+        await writer.close();
     }
 
     private async doDeltaBackup(backupFilePath: string) {
         const writer = new EncryptedFileWriter(this.configuration.password);
-            await writer.open(backupFilePath);
-            const logsProcessor = new LogsProcessor({
-                sqlSink: async (sql) => {
-                    if(sql) {
-                        await writer.write(Buffer.from(sql, 'utf-8'));
-                    } else {
-                        return Promise.resolve();
-                    }
-                },
-                filePostProcessor: async (file: string) => await this.configuration.fileManager.deleteFile(file)
-            });
-            await logsProcessor.process(this.configuration.logDirectory);
-            await writer.close();
+        await writer.open(backupFilePath);
+        const logsProcessor = new LogsProcessor({
+            sqlSink: async (sql) => {
+                if(sql) {
+                    await writer.write(Buffer.from(sql, 'utf-8'));
+                } else {
+                    return Promise.resolve();
+                }
+            },
+            filePostProcessor: async (file: string) => await this.configuration.fileManager.deleteFile(file)
+        });
+        await logsProcessor.process(this.configuration.logDirectory);
+        await writer.close();
+    }
+}
+
+class PgDumpProcessHandler extends ProcessHandler {
+
+    constructor(writer: EncryptedFileWriter) {
+        super();
+        this.writer = writer;
+    }
+
+    private writer: EncryptedFileWriter;
+
+    async onStdOut(data: any) {
+        await this.writer.write(data);
     }
 }

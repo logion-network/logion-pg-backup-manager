@@ -8,7 +8,7 @@ import path from "path";
 import { getLogger } from './util/Log';
 import { BackupManager, FullDumpConfiguration } from './BackupManager';
 import { NullFileManager } from './FileManager';
-import { PosixShell } from "./Shell";
+import { DefaultShell } from "./Shell";
 
 dotenv.config()
 const logger = getLogger();
@@ -26,7 +26,7 @@ const fullDumpConfiguration: FullDumpConfiguration = {
     database: "postgres",
     host: "localhost"
 };
-const shell = new PosixShell();
+const shell = new DefaultShell();
 const backupManager = new BackupManager({
     fileManager: new NullFileManager(),
     logDirectory,
