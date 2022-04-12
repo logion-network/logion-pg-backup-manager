@@ -8,7 +8,6 @@ import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from
 import { FileManager } from "../src/FileManager";
 import { BackupFileName } from "../src/Journal";
 import { Mailer, MailMessage } from "../src/Mailer";
-import { ParametersExtractor } from "../src/ParametersExtractor";
 import { ProcessHandler, Shell } from "../src/Shell";
 
 const workingDirectory = path.join(os.tmpdir(), "backup-manager-test");
@@ -49,7 +48,8 @@ describe("BackupManager", () => {
             journalFile,
             maxFullBackups: 1,
             mailer: mailer.object(),
-            mailTo
+            mailTo,
+            triggerCron: "* * * * * *"
         };
     });
 
@@ -57,12 +57,12 @@ describe("BackupManager", () => {
         let now = DateTime.now();
         await addFullBackupToJournal(now.minus({hours: 1}));
         const manager = new BackupManager(backupManagerConfiguration);
-        fileManager.setup(instance => instance.moveToIpfs(BackupFileName.getDeltaBackupFileName(now).fileName)).returns(Promise.resolve(cid));
+        fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName))).returns(Promise.resolve(cid));
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
 
         await manager.trigger(now);
 
-        fileManager.verify(instance => instance.moveToIpfs(BackupFileName.getDeltaBackupFileName(now).fileName), Times.Once());
+        fileManager.verify(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName)), Times.Once());
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.csv'))), Times.Exactly(8));
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.log'))), Times.Exactly(8));
 
@@ -116,7 +116,7 @@ async function clearJournal() {
 
 async function testCreatesFullBackup(now: DateTime, removedBackupFileName?: string) {
     shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
-    fileManager.setup(instance => instance.moveToIpfs(BackupFileName.getFullBackupFileName(now).fileName)).returns(Promise.resolve(cid));
+    fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(cid));
     if(removedBackupFileName) {
         fileManager.setup(instance => instance.removeFileFromIpfs(removedBackupFileName)).returns(Promise.resolve());
     }
@@ -124,7 +124,7 @@ async function testCreatesFullBackup(now: DateTime, removedBackupFileName?: stri
     const manager = new BackupManager(backupManagerConfiguration);
     await manager.trigger(now);
 
-    fileManager.verify(instance => instance.moveToIpfs(BackupFileName.getFullBackupFileName(now).fileName), Times.Once());
+    fileManager.verify(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName)), Times.Once());
     if(removedBackupFileName) {
         fileManager.verify(instance => instance.removeFileFromIpfs(removedBackupFileName), Times.Once());
     }

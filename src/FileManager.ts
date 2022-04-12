@@ -34,6 +34,7 @@ export class NullFileManager extends FileManager {
 export interface DefaultFileManagerConfiguration {
     shell: Shell;
     ipfsClusterCtl: string;
+    ipfsHost: string;
     minReplica: number;
     maxReplica: number;
 }
@@ -52,14 +53,15 @@ export class DefaultFileManager extends FileManager {
     }
 
     async moveToIpfs(file: string): Promise<string> {
-        const addCommand = `${this.configuration.ipfsClusterCtl} add ${file} --rmin ${this.configuration.minReplica} --rmax ${this.configuration.minReplica} --local`;
+        const addCommand = `${this.configuration.ipfsClusterCtl} --host ${this.configuration.ipfsHost} add --rmin ${this.configuration.minReplica} --rmax ${this.configuration.maxReplica} --local '${file}'`;
         const { stdout } = await this.configuration.shell.exec(addCommand);
         await this.deleteFile(file);
-        return stdout;
+        const output = stdout.split(" ");
+        return output[1];
     }
 
     async removeFileFromIpfs(cid: string): Promise<void> {
-        const removeCommand = `${this.configuration.ipfsClusterCtl} pin rm ${cid}`;
+        const removeCommand = `${this.configuration.ipfsClusterCtl} --host ${this.configuration.ipfsHost} pin rm ${cid}`;
         await this.configuration.shell.exec(removeCommand);
     }
 }

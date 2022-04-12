@@ -3,7 +3,7 @@ import { mkdirSync } from 'fs';
 import { Duration } from 'luxon';
 import path from 'path';
 
-import { BackupManager, FullDumpConfiguration } from "./BackupManager";
+import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from "./BackupManager";
 import { DefaultFileManager, DefaultFileManagerConfiguration } from './FileManager';
 import { Mailer } from './Mailer';
 import { DefaultShell } from './Shell';
@@ -25,7 +25,8 @@ export function buildBackupManagerFromConfig(): BackupManager {
         host: process.env.PG_HOST!,
     };
     const shell = new DefaultShell();
-    const mailer = new Mailer(process.env.SMTP_FROM!, {
+    const mailer = new Mailer({
+        from: process.env.SMTP_FROM!,
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || "465", 10),
         auth: {
@@ -34,15 +35,17 @@ export function buildBackupManagerFromConfig(): BackupManager {
             method: 'login'
         },
         secure: process.env.SMTP_SECURE !== "false",
-        logger: process.env.SMTP_LOGGER === "true"
+        logger: process.env.SMTP_LOGGER === "true",
+        enabled: process.env.SMTP_ENABLED === "true",
     });
     const fileManagerConfiguration: DefaultFileManagerConfiguration = {
         shell,
         ipfsClusterCtl: process.env.IPFS_CLUSTER_CTL!,
+        ipfsHost: process.env.IPFS_HOST!,
         minReplica: Number(process.env.IPFS_MIN_REPLICA!),
         maxReplica: Number(process.env.IPFS_MAX_REPLICA!),
     };
-    const backupManagerConfiguration = {
+    const backupManagerConfiguration: BackupManagerConfiguration = {
         fileManager: new DefaultFileManager(fileManagerConfiguration),
         logDirectory,
         password: process.env.PASSWORD!,
@@ -53,7 +56,8 @@ export function buildBackupManagerFromConfig(): BackupManager {
         journalFile: path.join(workingDirectory, 'journal.txt'),
         maxFullBackups: 30,
         mailer,
-        mailTo: process.env.MAIL_TO!
+        mailTo: process.env.MAIL_TO!,
+        triggerCron: process.env.TRIGGER_CRON!,
     };
     return new BackupManager(backupManagerConfiguration);
 }

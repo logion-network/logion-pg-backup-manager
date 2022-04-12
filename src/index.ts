@@ -33,4 +33,5 @@ const doBackup = async () => {
     }
 };
 
-schedule.scheduleJob('* 0 * * * *', doBackup); // Every hour
+logger.info(`Trigger CRON: ${backupManager.configuration.triggerCron}.`);
+schedule.scheduleJob(backupManager.configuration.triggerCron, doBackup);

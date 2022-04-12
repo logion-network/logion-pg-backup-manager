@@ -1,5 +1,5 @@
 import { constants } from "fs";
-import { access } from "fs/promises";
+import { access, rm } from "fs/promises";
 import { DateTime, Duration } from "luxon";
 import path from "path";
 
@@ -9,6 +9,9 @@ import { LogsProcessor } from "./LogsProcessor";
 import { ProcessHandler, Shell } from "./Shell";
 import { BackupFile, BackupFileName, Journal } from "./Journal";
 import { Mailer } from "./Mailer";
+import { getLogger } from "./util/Log";
+
+const logger = getLogger();
 
 export interface FullDumpConfiguration {
     readonly host: string;
@@ -28,6 +31,7 @@ export interface BackupManagerConfiguration {
     readonly maxFullBackups: number;
     readonly mailer: Mailer;
     readonly mailTo: string;
+    readonly triggerCron: string;
 }
 
 export class BackupManager {
@@ -50,6 +54,7 @@ export class BackupManager {
         let backupFile: BackupFileName;
         let backupFilePath: string;
         const lastFullBackup = journal.getLastFullBackup();
+        let logsToRemove: string[] = [];
         if(lastFullBackup === undefined
                 || date.diff(lastFullBackup.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
             backupFile = BackupFileName.getFullBackupFileName(date);
@@ -58,10 +63,12 @@ export class BackupManager {
         } else {
             backupFile = BackupFileName.getDeltaBackupFileName(date);
             backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
-            await this.doDeltaBackup(backupFilePath);
+            logsToRemove = await this.doDeltaBackup(backupFilePath);
         }
 
-        const cid = await this.configuration.fileManager.moveToIpfs(backupFile.fileName);
+        logger.info(`Adding file ${backupFilePath} to IPFS...`);
+        const cid = await this.configuration.fileManager.moveToIpfs(backupFilePath);
+        logger.info(`Success, file ${backupFilePath} got CID ${cid}`);
 
         journal.addBackup(new BackupFile({cid, fileName: backupFile}));
 
@@ -70,7 +77,9 @@ export class BackupManager {
             this.configuration.fileManager.removeFileFromIpfs(path.join(this.configuration.workingDirectory, file.fileName.fileName));
         }
 
+        logger.info("Writing journal...");
         await journal.write(this.configuration.journalFile);
+        logger.info("Journal successfully written, sending by e-mail...");
 
         await this.configuration.mailer.sendMail({
             to: this.configuration.mailTo,
@@ -83,38 +92,61 @@ export class BackupManager {
                 }
             ]
         });
+
+        logger.info("Removing processed logs...");
+        for(const file of logsToRemove) {
+            this.configuration.fileManager.deleteFile(file);
+        }
+        logger.info("All done.");
     }
 
     private async doFullBackup(backupFilePath: string) {
         const writer = new EncryptedFileWriter(this.configuration.password);
         await writer.open(backupFilePath);
-        const pgDumpHandler = new PgDumpProcessHandler(writer);
-        const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
-        const parameters = [
-            '-F', 'c',
-            '-h', fullDumpConfiguration.host,
-            '-U', fullDumpConfiguration.user,
-            fullDumpConfiguration.database
-        ];
-        await this.configuration.shell.spawn("pg_dump", parameters, pgDumpHandler);
-        await writer.close();
+        try {
+            const pgDumpHandler = new PgDumpProcessHandler(writer);
+            const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
+            const parameters = [
+                '-F', 'c',
+                '-h', fullDumpConfiguration.host,
+                '-U', fullDumpConfiguration.user,
+                fullDumpConfiguration.database
+            ];
+            await this.configuration.shell.spawn("pg_dump", parameters, pgDumpHandler);
+            await writer.close();
+        } catch(e) {
+            await writer.close();
+            await this.configuration.fileManager.deleteFile(backupFilePath);
+            throw e;
+        }
     }
 
-    private async doDeltaBackup(backupFilePath: string) {
+    private async doDeltaBackup(backupFilePath: string): Promise<string[]> {
         const writer = new EncryptedFileWriter(this.configuration.password);
         await writer.open(backupFilePath);
-        const logsProcessor = new LogsProcessor({
-            sqlSink: async (sql) => {
-                if(sql) {
-                    await writer.write(Buffer.from(sql, 'utf-8'));
-                } else {
+        try {
+            const toRemove: string[] = [];
+            const logsProcessor = new LogsProcessor({
+                sqlSink: async (sql) => {
+                    if(sql) {
+                        await writer.write(Buffer.from(sql, 'utf-8'));
+                    } else {
+                        return Promise.resolve();
+                    }
+                },
+                filePostProcessor: (file: string) => {
+                    toRemove.push(file);
                     return Promise.resolve();
                 }
-            },
-            filePostProcessor: async (file: string) => await this.configuration.fileManager.deleteFile(file)
-        });
-        await logsProcessor.process(this.configuration.logDirectory);
-        await writer.close();
+            });
+            await logsProcessor.process(this.configuration.logDirectory);
+            await writer.close();
+            return toRemove;
+        } catch(e) {
+            await writer.close();
+            await this.configuration.fileManager.deleteFile(backupFilePath);
+            throw e;
+        }
     }
 }
 

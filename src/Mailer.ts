@@ -9,22 +9,27 @@ export interface MailMessage {
     attachments?: Attachment[];
 }
 
+export interface MailerConfiguration extends TransportOptions {
+    from: string;
+    enabled: boolean;
+}
+
 export class Mailer {
 
-    constructor(from: string, transportOptions: TransportOptions) {
-        this.from = from;
-        this.transportOptions = transportOptions;
+    constructor(configuration: MailerConfiguration) {
+        this.configuration = configuration;
     }
 
-    private readonly from: string;
-
-    private readonly transportOptions: TransportOptions;
+    private readonly configuration: MailerConfiguration;
 
     async sendMail(message: MailMessage) {
-        const transport = createTransport(this.transportOptions);
+        if(!this.configuration.enabled) {
+            return;
+        }
+        const transport = createTransport(this.configuration);
         const mail: Mail.Options = {
             ...message,
-            from: this.from,
+            from: this.configuration.from,
         }
         await transport.sendMail(mail);
     }

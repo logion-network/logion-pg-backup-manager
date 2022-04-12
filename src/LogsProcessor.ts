@@ -30,10 +30,11 @@ export class LogsProcessor {
         files.sort((a, b) => a.localeCompare(b));
         for (let i = 0; i < files.length - 2; ++i) {
             const file = files[i];
+            const filePath = path.join(directory, file);
             if(file.endsWith(".csv")) {
-                await this.processCsvFile(path.join(directory, file));
+                await this.processCsvFile(filePath);
             }
-            await this.filePostProcessor(file);
+            await this.filePostProcessor(filePath);
         }
     }
 

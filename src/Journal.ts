@@ -1,5 +1,5 @@
 import { open } from 'fs/promises';
-import { DateTime, Zone } from 'luxon';
+import { DateTime } from 'luxon';
 
 const FULL_BACKUP_FILE_NAME_SUFFIX = "-full.sql.enc";
 
