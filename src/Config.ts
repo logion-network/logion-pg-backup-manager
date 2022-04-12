@@ -48,7 +48,7 @@ export function buildBackupManagerFromConfig(): BackupManager {
     const backupManagerConfiguration: BackupManagerConfiguration = {
         fileManager: new DefaultFileManager(fileManagerConfiguration),
         logDirectory,
-        password: process.env.PASSWORD!,
+        password: process.env.ENC_PASSWORD!,
         workingDirectory,
         maxDurationSinceLastFullBackup: Duration.fromISOTime(process.env.MAX_DURATION_SINCE_LAST_FULL_BACKUP!),
         fullDumpConfiguration,
