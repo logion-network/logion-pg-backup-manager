@@ -4,7 +4,8 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from "../src/BackupManager";
+import { BackupManager } from "../src/BackupManager";
+import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
 import { FileManager } from "../src/FileManager";
 import { BackupFileName } from "../src/Journal";
 import { Mailer, MailMessage } from "../src/Mailer";
@@ -23,6 +24,7 @@ let backupManagerConfiguration: BackupManagerConfiguration;
 const cid = "cid0";
 let mailer: Mock<Mailer>;
 const mailTo = "john.doe@logion.network";
+const commandFile = path.join(workingDirectory, "command");
 
 describe("BackupManager", () => {
 
@@ -49,7 +51,8 @@ describe("BackupManager", () => {
             maxFullBackups: 1,
             mailer: mailer.object(),
             mailTo,
-            triggerCron: "* * * * * *"
+            triggerCron: "* * * * * *",
+            commandFile,
         };
     });
 

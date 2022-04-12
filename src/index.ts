@@ -13,7 +13,7 @@ const doBackup = async () => {
         running = true;
         try {
             const now = DateTime.now().set({millisecond: 0});
-            logger.info(`Triggering backup at ${now.toISO()}...`);
+            logger.info(`Triggering at ${now.toISO()}...`);
             await backupManager.trigger(now);
         } catch (e: any) {
             logger.error(e.message);
@@ -33,5 +33,5 @@ const doBackup = async () => {
     }
 };
 
-logger.info(`Trigger CRON: ${backupManager.configuration.triggerCron}.`);
+logger.info(`Trigger schedule: ${backupManager.configuration.triggerCron}.`);
 schedule.scheduleJob(backupManager.configuration.triggerCron, doBackup);

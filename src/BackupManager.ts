@@ -1,38 +1,15 @@
-import { constants } from "fs";
-import { access, rm } from "fs/promises";
-import { DateTime, Duration } from "luxon";
-import path from "path";
+import { FileHandle, open } from "fs/promises";
+import { DateTime } from "luxon";
 
-import { EncryptedFileWriter } from './EncryptedFile';
-import { FileManager } from "./FileManager";
-import { LogsProcessor } from "./LogsProcessor";
-import { ProcessHandler, Shell } from "./Shell";
-import { BackupFile, BackupFileName, Journal } from "./Journal";
-import { Mailer } from "./Mailer";
+import { BackupManagerCommand, BackupManagerConfiguration } from "./Command";
+import { Backup } from "./Backup";
 import { getLogger } from "./util/Log";
 
 const logger = getLogger();
 
-export interface FullDumpConfiguration {
-    readonly host: string;
-    readonly user: string;
-    readonly database: string;
-}
+export const DEFAULT_COMMAND_NAME = "Default";
 
-export interface BackupManagerConfiguration {
-    readonly workingDirectory: string;
-    readonly logDirectory: string;
-    readonly fileManager: FileManager;
-    readonly password: string;
-    readonly maxDurationSinceLastFullBackup: Duration;
-    readonly shell: Shell;
-    readonly fullDumpConfiguration: FullDumpConfiguration;
-    readonly journalFile: string;
-    readonly maxFullBackups: number;
-    readonly mailer: Mailer;
-    readonly mailTo: string;
-    readonly triggerCron: string;
-}
+export const COMMAND_NAMES = [ DEFAULT_COMMAND_NAME, "Backup" ];
 
 export class BackupManager {
 
@@ -43,158 +20,46 @@ export class BackupManager {
     readonly configuration: BackupManagerConfiguration;
 
     async trigger(date: DateTime) {
-        let journal: Journal;
+        let command: BackupManagerCommand;
+        let commandName: string = await this.readCommandName();
+        if(commandName === "Backup" || commandName === DEFAULT_COMMAND_NAME) {
+            command = new Backup(this.configuration);
+        } else {
+            throw new Error(`Unsupported command ${commandName}`);
+        }
+
+        logger.info(`Executing ${commandName} command...`);
+        await command.trigger(date);
+
+        if(commandName !== DEFAULT_COMMAND_NAME) {
+            logger.info("Resetting command file...");
+            await this.resetCommandFile();
+        }
+    }
+
+    private async readCommandName(): Promise<string> {
+        let file: FileHandle;
         try {
-            await access(this.configuration.journalFile, constants.F_OK);
-            journal = await Journal.read(this.configuration.journalFile);
+            file = await open(this.configuration.commandFile, 'r');
         } catch {
-            journal = new Journal();
+            return DEFAULT_COMMAND_NAME;
         }
 
-        let backupFile: BackupFileName;
-        let backupFilePath: string;
-        const lastFullBackup = journal.getLastFullBackup();
-        let deltaBackupResult: DeltaBackupResult | undefined = undefined;
-        if(lastFullBackup === undefined
-                || date.diff(lastFullBackup.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
-            logger.info("Producing full backup...");
-            backupFile = BackupFileName.getFullBackupFileName(date);
-            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
-            await this.doFullBackup(backupFilePath);
-        } else {
-            logger.info("Producing delta...");
-            backupFile = BackupFileName.getDeltaBackupFileName(date);
-            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
-            deltaBackupResult = await this.doDeltaBackup(backupFilePath);
-        }
-
-        if(deltaBackupResult === undefined || !deltaBackupResult.emptyDelta) {
-            logger.info(`Adding file ${backupFilePath} to IPFS...`);
-            const cid = await this.configuration.fileManager.moveToIpfs(backupFilePath);
-            logger.info(`Success, file ${backupFilePath} got CID ${cid}`);
-
-            journal.addBackup(new BackupFile({cid, fileName: backupFile}));
-
-            const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
-            for(const file of toRemove) {
-                this.configuration.fileManager.removeFileFromIpfs(file.cid);
-            }
-
-            logger.info("Writing journal...");
-            await journal.write(this.configuration.journalFile);
-            logger.info("Journal successfully written, sending by e-mail...");
-
-            await this.configuration.mailer.sendMail({
-                to: this.configuration.mailTo,
-                subject: "Backup journal updated",
-                text: "New journal file available, see attachment.",
-                attachments: [
-                    {
-                        path: this.configuration.journalFile,
-                        filename: "journal.txt"
-                    }
-                ]
-            });
-        } else {
-            logger.info("No change detected.");
-        }
-
-        if(deltaBackupResult !== undefined) {
-            logger.info("Removing processed logs...");
-            for(const file of deltaBackupResult.logsToRemove) {
-                this.configuration.fileManager.deleteFile(file);
-            }
-        }
-
-        logger.info("All done.");
-    }
-
-    private async doFullBackup(backupFilePath: string) {
-        const writer = new EncryptedFileWriter(this.configuration.password);
-        await writer.open(backupFilePath);
         try {
-            const pgDumpHandler = new PgDumpProcessHandler(writer);
-            const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
-            const parameters = [
-                '-F', 'c',
-                '-h', fullDumpConfiguration.host,
-                '-U', fullDumpConfiguration.user,
-                fullDumpConfiguration.database
-            ];
-            await this.configuration.shell.spawn("pg_dump", parameters, pgDumpHandler);
-            await writer.close();
-        } catch(e) {
-            await writer.close();
-            await this.configuration.fileManager.deleteFile(backupFilePath);
-            throw e;
-        }
-    }
-
-    private async doDeltaBackup(backupFilePath: string): Promise<DeltaBackupResult> {
-        const writer = new EncryptedFileWriter(this.configuration.password);
-        await writer.open(backupFilePath);
-        try {
-            const logsToRemove: string[] = [];
-            let emptyDelta = true;
-            const logsProcessor = new LogsProcessor({
-                sqlSink: async (sql) => {
-                    const filteredSql = this.filterSql(sql);
-                    if(filteredSql) {
-                        emptyDelta = false;
-                        await writer.write(Buffer.from(filteredSql, 'utf-8'));
-                    } else {
-                        return Promise.resolve();
-                    }
-                },
-                filePostProcessor: (file: string) => {
-                    logsToRemove.push(file);
-                    return Promise.resolve();
-                }
-            });
-            await logsProcessor.process(this.configuration.logDirectory);
-            await writer.close();
-
-            if(emptyDelta) {
-                await this.configuration.fileManager.deleteFile(backupFilePath);
+            const name = await file.readFile({encoding: "utf-8"});
+            if(COMMAND_NAMES.includes(name)) {
+                return name;
+            } else {
+                throw new Error(`Invalid command name ${name}`)
             }
-
-            return { logsToRemove, emptyDelta };
-        } catch(e) {
-            await writer.close();
-            await this.configuration.fileManager.deleteFile(backupFilePath);
-            throw e;
+        } finally {
+            await file.close();
         }
     }
 
-    private filterSql(sql: string | undefined): string | undefined {
-        if(sql
-            && this.isNotSyncPointUpdate(sql)) {
-            return sql;
-        } else {
-            return undefined;
-        }
+    private async resetCommandFile() {
+        const file = await open(this.configuration.commandFile, 'w');
+        await file.write(DEFAULT_COMMAND_NAME, null, "utf-8");
+        await file.close();
     }
-
-    private isNotSyncPointUpdate(sql: string): boolean {
-        return !sql.startsWith('UPDATE "sync_point" SET "latest_head_block_number" =');
-    }
-}
-
-class PgDumpProcessHandler extends ProcessHandler {
-
-    constructor(writer: EncryptedFileWriter) {
-        super();
-        this.writer = writer;
-    }
-
-    private writer: EncryptedFileWriter;
-
-    async onStdOut(data: any) {
-        await this.writer.write(data);
-    }
-}
-
-interface DeltaBackupResult {
-    logsToRemove: string[];
-    emptyDelta: boolean;
 }

@@ -3,7 +3,8 @@ import { mkdirSync } from 'fs';
 import { Duration } from 'luxon';
 import path from 'path';
 
-import { BackupManager, BackupManagerConfiguration, FullDumpConfiguration } from "./BackupManager";
+import { BackupManager } from "./BackupManager";
+import { BackupManagerConfiguration, FullDumpConfiguration } from './Command';
 import { DefaultFileManager, DefaultFileManagerConfiguration } from './FileManager';
 import { Mailer } from './Mailer';
 import { DefaultShell } from './Shell';
@@ -58,6 +59,7 @@ export function buildBackupManagerFromConfig(): BackupManager {
         mailer,
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
+        commandFile: path.join(workingDirectory, 'command.txt'),
     };
     return new BackupManager(backupManagerConfiguration);
 }
