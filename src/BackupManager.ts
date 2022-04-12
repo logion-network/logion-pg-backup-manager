@@ -74,7 +74,7 @@ export class BackupManager {
 
         const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
         for(const file of toRemove) {
-            this.configuration.fileManager.removeFileFromIpfs(path.join(this.configuration.workingDirectory, file.fileName.fileName));
+            this.configuration.fileManager.removeFileFromIpfs(file.cid);
         }
 
         logger.info("Writing journal...");

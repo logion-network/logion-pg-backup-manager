@@ -65,6 +65,7 @@ describe("BackupManager", () => {
         fileManager.verify(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName)), Times.Once());
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.csv'))), Times.Exactly(8));
         fileManager.verify(instance => instance.deleteFile(It.Is<string>(file => file.endsWith('.log'))), Times.Exactly(8));
+        fileManager.verify(instance => instance.removeFileFromIpfs(It.IsAny()), Times.Never());
 
         verifyMailSent();
     });
@@ -77,14 +78,14 @@ describe("BackupManager", () => {
 
     it("creates full with too old full backup", async () => {
         let now = DateTime.now();
-        const fileName = await addFullBackupToJournal(now.minus({hours: 25}));
-        await testCreatesFullBackup(now, fileName);
+        const cid = await addFullBackupToJournal(now.minus({hours: 25}));
+        await testCreatesFullBackup(now, cid);
     });
 
     it("creates full with only legacy backup", async () => {
         let now = DateTime.now();
-        const fileName = await addFullLegacyBackupToJournal(now);
-        await testCreatesFullBackup(now, fileName);
+        const cid = await addFullLegacyBackupToJournal(now);
+        await testCreatesFullBackup(now, cid);
     });
 });
 
@@ -94,7 +95,7 @@ async function addFullBackupToJournal(date: DateTime): Promise<string> {
     const fileName = BackupFileName.getFullBackupFileName(date).fileName;
     await file.write(Buffer.from(`${cid} ${fileName}\n`));
     await file.close();
-    return path.join(workingDirectory, fileName);
+    return cid;
 }
 
 function verifyMailSent() {
@@ -114,19 +115,19 @@ async function clearJournal() {
     await file.close();
 }
 
-async function testCreatesFullBackup(now: DateTime, removedBackupFileName?: string) {
+async function testCreatesFullBackup(now: DateTime, removedBackupCid?: string) {
     shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
-    fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(cid));
-    if(removedBackupFileName) {
-        fileManager.setup(instance => instance.removeFileFromIpfs(removedBackupFileName)).returns(Promise.resolve());
+    fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(""));
+    if(removedBackupCid) {
+        fileManager.setup(instance => instance.removeFileFromIpfs(removedBackupCid)).returns(Promise.resolve());
     }
 
     const manager = new BackupManager(backupManagerConfiguration);
     await manager.trigger(now);
 
     fileManager.verify(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName)), Times.Once());
-    if(removedBackupFileName) {
-        fileManager.verify(instance => instance.removeFileFromIpfs(removedBackupFileName), Times.Once());
+    if(removedBackupCid) {
+        fileManager.verify(instance => instance.removeFileFromIpfs(removedBackupCid), Times.Once());
     }
 
     verifyMailSent();
@@ -153,5 +154,5 @@ async function addFullLegacyBackupToJournal(date: DateTime): Promise<string> {
     const fileName = BackupFileName.getLegacyFullBackupFileName(date).fileName;
     await file.write(Buffer.from(`added ${cid} ${fileName}\n`));
     await file.close();
-    return path.join(workingDirectory, fileName);
+    return cid;
 }
