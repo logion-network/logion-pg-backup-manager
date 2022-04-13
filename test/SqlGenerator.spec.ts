@@ -1,13 +1,15 @@
 import { SqlGenerator } from "../src/SqlGenerator";
 
 const REGULAR_LOG = {
+    '11': 'LOG',
     '13': 'database system is ready to accept connections'
 };
 
-const STATEMENT_INSTRUCTION = 'CREATE EXTENSION IF NOT EXISTS pgcrypto;';
+const STATEMENT_INSTRUCTION = 'CREATE EXTENSION IF NOT EXISTS pgcrypto';
 
 const STATEMENT = {
     '7': "idle",
+    '11': 'LOG',
     '13': `statement: ${STATEMENT_INSTRUCTION}`
 };
 
@@ -15,11 +17,12 @@ const EXECUTE_INSTRUCTION = 'INSERT INTO "protection_request"("id", "address_to_
 
 const EXECUTE = {
     '7': "INSERT",
+    '11': 'LOG',
     '13': `execute <unnamed>: ${EXECUTE_INSTRUCTION}`,
     '14': "parameters: $1 = '41de0a6d-1fd2-49e7-a5f2-f28952233007', $2 = '2022-04-05 09:33:23.219', $3 = 'f', $4 = '5EBxoSssqNo23FvsDeUxjyQScnfEiGxJaNwuwqBH2Twe35BX', $5 = 'gerard@logion.network', $6 = 'Gérard', $7 = 'Dethier', $8 = '+1234', $9 = '?', $10 = '?', $11 = '?', $12 = '?', $13 = '?', $14 = 'PENDING', $15 = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'"
 };
 
-const RESOLVED_EXECUTE_INSTRUCTION = `INSERT INTO "protection_request"("id", "address_to_recover", "created_on", "is_recovery", "requester_address", "email", "first_name", "last_name", "phone_number", "city", "country", "line1", "line2", "postal_code", "status", "other_legal_officer_address", "decision_on", "reject_reason", "loc_id") VALUES ('41de0a6d-1fd2-49e7-a5f2-f28952233007', DEFAULT, '2022-04-05 09:33:23.219', 'f', '5EBxoSssqNo23FvsDeUxjyQScnfEiGxJaNwuwqBH2Twe35BX', 'gerard@logion.network', 'Gérard', 'Dethier', '+1234', '?', '?', '?', '?', '?', 'PENDING', '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', DEFAULT, DEFAULT, DEFAULT);`
+const RESOLVED_EXECUTE_INSTRUCTION = `INSERT INTO "protection_request"("id", "address_to_recover", "created_on", "is_recovery", "requester_address", "email", "first_name", "last_name", "phone_number", "city", "country", "line1", "line2", "postal_code", "status", "other_legal_officer_address", "decision_on", "reject_reason", "loc_id") VALUES ('41de0a6d-1fd2-49e7-a5f2-f28952233007', DEFAULT, '2022-04-05 09:33:23.219', 'f', '5EBxoSssqNo23FvsDeUxjyQScnfEiGxJaNwuwqBH2Twe35BX', 'gerard@logion.network', 'Gérard', 'Dethier', '+1234', '?', '?', '?', '?', '?', 'PENDING', '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty', DEFAULT, DEFAULT, DEFAULT)`
 
 describe("SqlGenerator", () => {
 

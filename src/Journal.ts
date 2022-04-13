@@ -1,4 +1,5 @@
-import { open } from 'fs/promises';
+import { constants } from 'fs';
+import { access, open } from 'fs/promises';
 import { DateTime } from 'luxon';
 
 const FULL_BACKUP_FILE_NAME_SUFFIX = "-full.sql.enc";
@@ -145,13 +146,22 @@ export class Journal implements Iterable<BackupFile> {
     }
 
     getLastFullBackup(): BackupFile | undefined {
+        const index = this.getLastFullBackupIndex();
+        if(index >= 0) {
+            return this.backupFiles[index];
+        } else {
+            return undefined;
+        }
+    }
+
+    private getLastFullBackupIndex(): number {
         for(let i = this.backupFiles.length - 1; i >= 0; --i) {
             const backupFile = this.backupFiles[i];
             if(backupFile.fileName.type === 'FULL') {
-                return backupFile;
+                return i;
             }
         }
-        return undefined;
+        return -1;
     }
 
     keepOnlyLastFullBackups(maxFullBackups: number): BackupFile[] {
@@ -196,7 +206,25 @@ export class Journal implements Iterable<BackupFile> {
         }
     }
 
+    getRecoveryPath(): BackupFile[] {
+        const index = this.getLastFullBackupIndex();
+        if(index < 0) {
+            throw new Error("No recovery path");
+        } else {
+            return this.backupFiles.slice(index);
+        }
+    }
+
     [Symbol.iterator](): Iterator<BackupFile, BackupFile> {
         return this.backupFiles[Symbol.iterator]();
+    }
+}
+
+export async function readJournalOrNew(journalFile: string): Promise<Journal> {
+    try {
+        await access(journalFile, constants.F_OK);
+        return await Journal.read(journalFile);
+    } catch {
+        return new Journal();
     }
 }

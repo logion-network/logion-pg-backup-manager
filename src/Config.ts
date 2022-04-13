@@ -42,9 +42,11 @@ export function buildBackupManagerFromConfig(): BackupManager {
     const fileManagerConfiguration: DefaultFileManagerConfiguration = {
         shell,
         ipfsClusterCtl: process.env.IPFS_CLUSTER_CTL!,
-        ipfsHost: process.env.IPFS_HOST!,
+        ipfsClusterHost: process.env.IPFS_CLUSTER_HOST!,
         minReplica: Number(process.env.IPFS_MIN_REPLICA!),
         maxReplica: Number(process.env.IPFS_MAX_REPLICA!),
+        ipfs: process.env.IPFS!,
+        ipfsHost: process.env.IPFS_HOST!,
     };
     const backupManagerConfiguration: BackupManagerConfiguration = {
         fileManager: new DefaultFileManager(fileManagerConfiguration),

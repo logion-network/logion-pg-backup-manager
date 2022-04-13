@@ -1,11 +1,10 @@
-import { constants } from "fs";
-import { access } from "fs/promises";
+import { stat } from "fs/promises";
 import { DateTime } from "luxon";
 import path from "path";
 
 import { BackupManagerCommand } from "./Command";
 import { EncryptedFileWriter } from "./EncryptedFile";
-import { BackupFile, BackupFileName, Journal } from "./Journal";
+import { BackupFile, BackupFileName, readJournalOrNew } from "./Journal";
 import { LogsProcessor } from "./LogsProcessor";
 import { ProcessHandler } from "./Shell";
 import { getLogger } from "./util/Log";
@@ -15,13 +14,7 @@ const logger = getLogger();
 export class Backup extends BackupManagerCommand {
 
     async trigger(date: DateTime): Promise<void> {
-        let journal: Journal;
-        try {
-            await access(this.configuration.journalFile, constants.F_OK);
-            journal = await Journal.read(this.configuration.journalFile);
-        } catch {
-            journal = new Journal();
-        }
+        const journal = await readJournalOrNew(this.configuration.journalFile);
 
         let backupFile: BackupFileName;
         let backupFilePath: string;
@@ -41,6 +34,8 @@ export class Backup extends BackupManagerCommand {
         }
 
         if(deltaBackupResult === undefined || !deltaBackupResult.emptyDelta) {
+            const fileStat = await stat(backupFilePath);
+            logger.info(`File is ${fileStat.size} bytes large.`);
             logger.info(`Adding file ${backupFilePath} to IPFS...`);
             const cid = await this.configuration.fileManager.moveToIpfs(backupFilePath);
             logger.info(`Success, file ${backupFilePath} got CID ${cid}`);
@@ -113,7 +108,7 @@ export class Backup extends BackupManagerCommand {
                     const filteredSql = this.filterSql(sql);
                     if(filteredSql) {
                         emptyDelta = false;
-                        await writer.write(Buffer.from(filteredSql, 'utf-8'));
+                        await writer.write(Buffer.from(filteredSql + ";\n", 'utf-8'));
                     } else {
                         return Promise.resolve();
                     }
@@ -163,6 +158,10 @@ class PgDumpProcessHandler extends ProcessHandler {
 
     async onStdOut(data: any) {
         await this.writer.write(data);
+    }
+
+    async onStdErr(data: any) {
+        logger.warn(data.toString("utf-8"));
     }
 }
 

@@ -1,4 +1,5 @@
 import { exec, spawn } from 'child_process';
+import { Writable } from 'stream';
 
 export interface ShellExecResult {
     stdout: string;
@@ -16,6 +17,10 @@ export abstract class ProcessHandler {
     }
 
     async onClose(code: number | null) {
+
+    }
+
+    onStdIn(stdin: Writable) {
 
     }
 }
@@ -46,7 +51,9 @@ export class DefaultShell extends Shell {
 
     async spawn(command: string, args: string[], handler: ProcessHandler): Promise<void> {
         return new Promise<void>((resolve, reject) => {
+            let rejected = false;
             const process = spawn(command, args);
+            handler.onStdIn(process.stdin);
             process.stdout.on('data', async data => {
                 process.stdout.pause();
                 await handler.onStdOut(data);
@@ -59,9 +66,21 @@ export class DefaultShell extends Shell {
             });
             process.on('close', async code => {
                 await handler.onClose(code);
-                resolve();
+                if(code !== 0) {
+                    if(!rejected) {
+                        rejected = true;
+                        reject(new Error("Exit code is not zero"));
+                    }
+                } else {
+                    resolve();
+                }
             });
-            process.on('error', reject);
+            process.on('error', error => {
+                if(!rejected) {
+                    rejected = true;
+                    reject(error);
+                }
+            });
         });
     }
 }

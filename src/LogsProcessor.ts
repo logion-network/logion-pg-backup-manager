@@ -14,16 +14,13 @@ export class LogsProcessor {
         sqlSink: SqlSink,
         filePostProcessor: FilePostProcessor
     }) {
-        this.sqlSink = args.sqlSink;
+        this.csvProcessor = new CsvProcessor({ sqlSink: args.sqlSink });
         this.filePostProcessor = args.filePostProcessor;
-        this.sqlGenerator = new SqlGenerator();
     }
 
-    private sqlSink: SqlSink;
+    private csvProcessor: CsvProcessor;
 
     private filePostProcessor: FilePostProcessor;
-
-    private sqlGenerator: SqlGenerator;
 
     async process(directory: string): Promise<void> {
         const files = await readdir(directory);
@@ -32,13 +29,27 @@ export class LogsProcessor {
             const file = files[i];
             const filePath = path.join(directory, file);
             if(file.endsWith(".csv")) {
-                await this.processCsvFile(filePath);
+                await this.csvProcessor.processCsvFile(filePath);
             }
             await this.filePostProcessor(filePath);
         }
     }
+}
 
-    private processCsvFile(path: string): Promise<void> {
+export class CsvProcessor {
+
+    constructor(args: {
+        sqlSink: SqlSink
+    }) {
+        this.sqlSink = args.sqlSink;
+        this.sqlGenerator = new SqlGenerator();
+    }
+
+    private sqlSink: SqlSink;
+
+    private sqlGenerator: SqlGenerator;
+
+    processCsvFile(path: string): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             const stream = fs.createReadStream(path)
                 .pipe(csv({headers: false}))
@@ -46,6 +57,8 @@ export class LogsProcessor {
                     stream.pause();
                     try {
                         await this.sqlSink(this.sqlGenerator.generate(data));
+                    } catch(e) {
+                        reject(e);
                     } finally {
                         stream.resume();
                     }

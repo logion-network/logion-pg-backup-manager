@@ -1,7 +1,9 @@
 FROM node:16
 WORKDIR /opt/logion-pg-backup-manager
 
-RUN apt-get update && apt-get -y --no-install-recommends install postgresql-client ; rm -rf /var/lib/apt/lists/*
+RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+    && echo "deb http://apt.postgresql.org/pub/repos/apt/ buster-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get -y --no-install-recommends install postgresql-client-12 && rm -rf /var/lib/apt/lists/*
 
 RUN VERSION=0.14.5 \
     && FILE_NAME=ipfs-cluster-ctl_v${VERSION}_linux-amd64.tar.gz \
@@ -17,4 +19,5 @@ RUN VERSION=0.12.0 \
     && rm ${FILE_NAME}
 
 ENV IPFS_CLUSTER_CTL "/opt/logion-pg-backup-manager/ipfs-cluster-ctl/ipfs-cluster-ctl"
+ENV IPFS "/opt/logion-pg-backup-manager/go-ipfs/ipfs"
 ENV WORKING_DIRECTORY "/opt/logion-pg-backup-manager/work"

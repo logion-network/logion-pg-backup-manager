@@ -15,8 +15,12 @@ export class SqlGenerator {
      */
     generate(row: any): string | undefined {
         const commandTag = row['7'] as string;
+        const errorSeverity = row['11'] as string;
         const message = row['13'] as string;
-        if(!commandTag) {
+        const applicationName = row['22'] as string;
+        if(!commandTag
+                || errorSeverity !== "LOG"
+                || applicationName === "pg_restore") {
             return undefined;
         } else if(message.startsWith(STATEMENT_PREFIX)) {
             const query = message.substring(STATEMENT_PREFIX.length);
@@ -25,9 +29,9 @@ export class SqlGenerator {
             const query = message.substring(UNNAMED_QUERY.length);
             const parameters = row['14'] as string;
             const parametersRecord = new ParametersExtractor(parameters).extract();
-            return this.resolvePlaceholders(query, parametersRecord) + ';';
+            return this.resolvePlaceholders(query, parametersRecord);
         } else {
-            throw new Error("Invalid row");
+            throw new Error(`Invalid row: commandTag=${commandTag}, message=${message}`);
         }
     }
 

@@ -4,12 +4,15 @@ import { DateTime } from "luxon";
 import { BackupManagerCommand, BackupManagerConfiguration } from "./Command";
 import { Backup } from "./Backup";
 import { getLogger } from "./util/Log";
+import { Restore } from "./Restore";
 
 const logger = getLogger();
 
-export const DEFAULT_COMMAND_NAME = "Default";
+export type CommandName = "Default" | "Backup" | "Restore";
 
-export const COMMAND_NAMES = [ DEFAULT_COMMAND_NAME, "Backup" ];
+export const DEFAULT_COMMAND_NAME: CommandName = "Default";
+
+export const COMMAND_NAMES: CommandName[] = [ DEFAULT_COMMAND_NAME, "Backup", "Restore" ];
 
 export class BackupManager {
 
@@ -24,6 +27,8 @@ export class BackupManager {
         let commandName: string = await this.readCommandName();
         if(commandName === "Backup" || commandName === DEFAULT_COMMAND_NAME) {
             command = new Backup(this.configuration);
+        } else if(commandName === "Restore") {
+            command = new Restore(this.configuration);
         } else {
             throw new Error(`Unsupported command ${commandName}`);
         }
@@ -46,8 +51,9 @@ export class BackupManager {
         }
 
         try {
-            const name = await file.readFile({encoding: "utf-8"});
-            if(COMMAND_NAMES.includes(name)) {
+            const content = await file.readFile({encoding: "utf-8"});
+            const name = content.trim();
+            if(COMMAND_NAMES.includes(name as CommandName)) {
                 return name;
             } else {
                 throw new Error(`Invalid command name ${name}`)

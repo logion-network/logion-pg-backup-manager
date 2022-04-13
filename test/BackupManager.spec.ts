@@ -4,10 +4,11 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager } from "../src/BackupManager";
+import { BackupManager, CommandName } from "../src/BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
+import { EncryptedFileWriter } from "../src/EncryptedFile";
 import { FileManager } from "../src/FileManager";
-import { BackupFileName } from "../src/Journal";
+import { BackupFile, BackupFileName } from "../src/Journal";
 import { Mailer, MailMessage } from "../src/Mailer";
 import { ProcessHandler, Shell } from "../src/Shell";
 
@@ -17,7 +18,7 @@ const fullDumpConfiguration: FullDumpConfiguration = {
     database: "postgres",
     host: "localhost"
 };
-const shell = new Mock<Shell>();
+let shell: Mock<Shell>;
 const journalFile = path.join(workingDirectory, "journal");
 let fileManager: Mock<FileManager>;
 let backupManagerConfiguration: BackupManagerConfiguration;
@@ -38,6 +39,8 @@ describe("BackupManager", () => {
 
         mailer = new Mock<Mailer>();
         mailer.setup(instance => instance.sendMail(It.IsAny())).returns(Promise.resolve());
+
+        shell = new Mock<Shell>();
 
         backupManagerConfiguration = {
             fileManager: fileManager.object(),
@@ -81,24 +84,54 @@ describe("BackupManager", () => {
 
     it("creates full with too old full backup", async () => {
         let now = DateTime.now();
-        const cid = await addFullBackupToJournal(now.minus({hours: 25}));
-        await testCreatesFullBackup(now, cid);
+        const file = await addFullBackupToJournal(now.minus({hours: 25}));
+        await testCreatesFullBackup(now, file.cid);
     });
 
     it("creates full with only legacy backup", async () => {
         let now = DateTime.now();
-        const cid = await addFullLegacyBackupToJournal(now);
-        await testCreatesFullBackup(now, cid);
+        const file = await addFullLegacyBackupToJournal(now);
+        await testCreatesFullBackup(now, file.cid);
+    });
+
+    it("restores", async () => {
+        let now = DateTime.now();
+        const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
+        const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
+        await setCommand("Restore");
+
+        const manager = new BackupManager(backupManagerConfiguration);
+        fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
+        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+
+        const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
+        await createEncryptedFile(fullFilePath);
+        const deltaFilePath = path.join(workingDirectory, deltaFile.fileName.fileName);
+        await createEncryptedFile(deltaFilePath);
+
+        shell.setup(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.Is(pgRestoreOptions), It.IsAny())).returns(Promise.resolve());
+        shell.setup(instance => instance.spawn(It.Is(command => command === "psql"), It.Is(psqlOptions), It.IsAny())).returns(Promise.resolve());
+
+        await manager.trigger(now);
+
+        fileManager.verify(instance => instance.downloadFromIpfs(fullFile.cid, fullFilePath), Times.Once());
+        fileManager.verify(instance => instance.deleteFile(fullFilePath), Times.Once());
+
+        fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
+        fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
     });
 });
 
-async function addFullBackupToJournal(date: DateTime): Promise<string> {
+async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
     const file = await open(journalFile, 'w');
     const cid = "cid0";
-    const fileName = BackupFileName.getFullBackupFileName(date).fileName;
-    await file.write(Buffer.from(`${cid} ${fileName}\n`));
+    const fileName = BackupFileName.getFullBackupFileName(date);
+    await file.write(Buffer.from(`${cid} ${fileName.fileName}\n`));
     await file.close();
-    return cid;
+    return new BackupFile({
+        cid,
+        fileName
+    });
 }
 
 function verifyMailSent() {
@@ -151,11 +184,60 @@ function fullBackupSpawnMock(command: string, parameters: string[], handler: Pro
     }
 }
 
-async function addFullLegacyBackupToJournal(date: DateTime): Promise<string> {
+async function addFullLegacyBackupToJournal(date: DateTime): Promise<BackupFile> {
     const file = await open(journalFile, 'w');
     const cid = "cid0";
-    const fileName = BackupFileName.getLegacyFullBackupFileName(date).fileName;
-    await file.write(Buffer.from(`added ${cid} ${fileName}\n`));
+    const fileName = BackupFileName.getLegacyFullBackupFileName(date);
+    await file.write(Buffer.from(`added ${cid} ${fileName.fileName}\n`));
     await file.close();
-    return cid;
+    return new BackupFile({
+        cid,
+        fileName
+    });
+}
+
+async function addDeltaBackupToJournal(date: DateTime): Promise<BackupFile> {
+    const file = await open(journalFile, 'a');
+    const cid = "cid1";
+    const fileName = BackupFileName.getDeltaBackupFileName(date);
+    await file.write(Buffer.from(`${cid} ${fileName.fileName}\n`));
+    await file.close();
+    return new BackupFile({
+        cid,
+        fileName
+    });
+}
+
+async function setCommand(commandName: CommandName): Promise<void> {
+    const file = await open(commandFile, 'w');
+    await file.write(Buffer.from(`${commandName}`));
+    await file.close();
+}
+
+async function createEncryptedFile(path: string): Promise<void> {
+    const file = await open(path, 'w');
+    const writer = new EncryptedFileWriter(backupManagerConfiguration.password);
+    await writer.open(path);
+    await writer.write(Buffer.from("data", 'utf-8'));
+    await writer.close();
+    await file.close();
+}
+
+function pgRestoreOptions(parameters: string[]): boolean {
+    const expectedParameters = [
+        '-F', 'c',
+        '-h', fullDumpConfiguration.host,
+        '-U', fullDumpConfiguration.user,
+        fullDumpConfiguration.database
+    ];
+    return parameters.every((value, index) => value === expectedParameters[index]);
+}
+
+function psqlOptions(parameters: string[]): boolean {
+    const expectedParameters = [
+        '-h', fullDumpConfiguration.host,
+        '-U', fullDumpConfiguration.user,
+        fullDumpConfiguration.database
+    ];
+    return parameters.every((value, index) => value === expectedParameters[index]);
 }
