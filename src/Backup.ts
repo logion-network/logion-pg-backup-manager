@@ -20,7 +20,8 @@ export class Backup extends BackupManagerCommand {
         let backupFilePath: string;
         const lastFullBackup = journal.getLastFullBackup();
         let deltaBackupResult: DeltaBackupResult | undefined = undefined;
-        if(lastFullBackup === undefined
+        if(this.configuration.forceFullBackup
+                || lastFullBackup === undefined
                 || date.diff(lastFullBackup.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
             logger.info("Producing full backup...");
             backupFile = BackupFileName.getFullBackupFileName(date);
@@ -42,9 +43,11 @@ export class Backup extends BackupManagerCommand {
 
             journal.addBackup(new BackupFile({cid, fileName: backupFile}));
 
-            const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
-            for(const file of toRemove) {
-                this.configuration.fileManager.removeFileFromIpfs(file.cid);
+            if(!this.configuration.forceFullBackup) {
+                const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
+                for(const file of toRemove) {
+                    this.configuration.fileManager.removeFileFromIpfs(file.cid);
+                }
             }
 
             logger.info("Writing journal...");
@@ -108,8 +111,10 @@ export class Backup extends BackupManagerCommand {
                     const filteredSql = this.filterSql(sql);
                     if(filteredSql) {
                         emptyDelta = false;
+                        logger.debug(`Appending ${sql}`);
                         await writer.write(Buffer.from(filteredSql + ";\n", 'utf-8'));
                     } else {
+                        logger.debug(`Ignoring ${sql}`);
                         return Promise.resolve();
                     }
                 },
@@ -135,15 +140,28 @@ export class Backup extends BackupManagerCommand {
 
     private filterSql(sql: string | undefined): string | undefined {
         if(sql
-            && this.isNotSyncPointUpdate(sql)) {
+            && this.isNotSyncPointMod(sql)
+            && this.isNotSessionMod(sql)
+            && this.isNotTransactionMod(sql)) {
             return sql;
         } else {
             return undefined;
         }
     }
 
-    private isNotSyncPointUpdate(sql: string): boolean {
-        return !sql.startsWith('UPDATE "sync_point" SET "latest_head_block_number" =');
+    private isNotSyncPointMod(sql: string): boolean {
+        return !sql.startsWith('INSERT INTO "sync_point"')
+            && !sql.startsWith('UPDATE "sync_point"');
+    }
+
+    private isNotSessionMod(sql: string): boolean {
+        return !sql.startsWith('INSERT INTO "session"')
+            && !sql.startsWith('DELETE FROM "session"');
+    }
+
+    private isNotTransactionMod(sql: string): boolean {
+        return !sql.startsWith('INSERT INTO "transaction"')
+            && !sql.startsWith('DELETE FROM "transaction"');
     }
 }
 

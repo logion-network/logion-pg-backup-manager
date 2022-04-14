@@ -34,7 +34,7 @@ describe("BackupManager", () => {
         await mkdir(workingDirectory, {recursive: true});
     });
 
-    beforeEach(() => {
+    beforeEach(async () => {
         fileManager = new Mock<FileManager>();
 
         mailer = new Mock<Mailer>();
@@ -56,7 +56,10 @@ describe("BackupManager", () => {
             mailTo,
             triggerCron: "* * * * * *",
             commandFile,
+            forceFullBackup: false,
         };
+
+        await setCommand("Default");
     });
 
     it("creates delta", async () => {
@@ -103,6 +106,7 @@ describe("BackupManager", () => {
         const manager = new BackupManager(backupManagerConfiguration);
         fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid2"));
 
         const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
         await createEncryptedFile(fullFilePath);
@@ -119,6 +123,9 @@ describe("BackupManager", () => {
 
         fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
         fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
+
+        const postRestoreBackupFile = path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName);
+        fileManager.verify(instance => instance.moveToIpfs(postRestoreBackupFile), Times.Once());
     });
 });
 

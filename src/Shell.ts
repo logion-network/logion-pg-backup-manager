@@ -29,7 +29,7 @@ export abstract class Shell {
 
     abstract exec(command: string): Promise<ShellExecResult>;
 
-    abstract spawn(command: string, args: string[], handler: ProcessHandler): Promise<void>;
+    abstract spawn(command: string, args: string[], handler: ProcessHandler, env?: NodeJS.ProcessEnv | undefined): Promise<void>;
 }
 
 export class DefaultShell extends Shell {
@@ -49,10 +49,12 @@ export class DefaultShell extends Shell {
         });
     }
 
-    async spawn(command: string, args: string[], handler: ProcessHandler): Promise<void> {
+    async spawn(command: string, args: string[], handler: ProcessHandler, env?: NodeJS.ProcessEnv | undefined): Promise<void> {
         return new Promise<void>((resolve, reject) => {
             let rejected = false;
-            const process = spawn(command, args);
+            const process = spawn(command, args, {
+                env
+            });
             handler.onStdIn(process.stdin);
             process.stdout.on('data', async data => {
                 process.stdout.pause();

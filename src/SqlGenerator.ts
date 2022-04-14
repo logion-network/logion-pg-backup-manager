@@ -1,7 +1,12 @@
+import { APP_NAME } from "./Command";
 import { ParametersExtractor } from "./ParametersExtractor";
+import { getLogger } from "./util/Log";
+
+const logger = getLogger();
 
 const STATEMENT_PREFIX = "statement: ";
 const UNNAMED_QUERY = "execute <unnamed>: ";
+const IGNORED_APPLICATIONS = [ "pg_restore", APP_NAME ]
 
 export class SqlGenerator {
 
@@ -18,9 +23,10 @@ export class SqlGenerator {
         const errorSeverity = row['11'] as string;
         const message = row['13'] as string;
         const applicationName = row['22'] as string;
+        logger.debug(`commandTag=${commandTag} errorSeverity=${errorSeverity} message=${message} applicationName=${applicationName}`);
         if(!commandTag
                 || errorSeverity !== "LOG"
-                || applicationName === "pg_restore") {
+                || IGNORED_APPLICATIONS.includes(applicationName)) {
             return undefined;
         } else if(message.startsWith(STATEMENT_PREFIX)) {
             const query = message.substring(STATEMENT_PREFIX.length);

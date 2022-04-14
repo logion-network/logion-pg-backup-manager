@@ -3,6 +3,8 @@ import { FileManager } from "./FileManager";
 import { Mailer } from "./Mailer";
 import { Shell } from "./Shell";
 
+export const APP_NAME = "pg-backup-manager";
+
 export interface FullDumpConfiguration {
     readonly host: string;
     readonly user: string;
@@ -23,6 +25,7 @@ export interface BackupManagerConfiguration {
     readonly mailTo: string;
     readonly triggerCron: string;
     readonly commandFile: string;
+    readonly forceFullBackup: boolean;
 }
 
 export abstract class BackupManagerCommand {

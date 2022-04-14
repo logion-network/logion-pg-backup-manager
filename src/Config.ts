@@ -1,4 +1,3 @@
-import dotenv from 'dotenv';
 import { mkdirSync } from 'fs';
 import { Duration } from 'luxon';
 import path from 'path';
@@ -8,8 +7,6 @@ import { BackupManagerConfiguration, FullDumpConfiguration } from './Command';
 import { DefaultFileManager, DefaultFileManagerConfiguration } from './FileManager';
 import { Mailer } from './Mailer';
 import { DefaultShell } from './Shell';
-
-dotenv.config()
 
 export function buildBackupManagerFromConfig(): BackupManager {
     const logDirectory = process.env.LOG_DIRECTORY;
@@ -62,6 +59,7 @@ export function buildBackupManagerFromConfig(): BackupManager {
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
         commandFile: path.join(workingDirectory, 'command.txt'),
+        forceFullBackup: false,
     };
     return new BackupManager(backupManagerConfiguration);
 }

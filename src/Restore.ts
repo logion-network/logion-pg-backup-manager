@@ -1,7 +1,9 @@
+import { DateTime } from "luxon";
 import path from "path";
 import { Writable } from "stream";
+import { Backup } from "./Backup";
 
-import { BackupManagerCommand } from "./Command";
+import { APP_NAME, BackupManagerCommand } from "./Command";
 import { EncryptedFileReader } from "./EncryptedFile";
 import { BackupFile, readJournalOrNew } from "./Journal";
 import { ProcessHandler } from "./Shell";
@@ -11,7 +13,7 @@ const logger = getLogger();
 
 export class Restore extends BackupManagerCommand {
 
-    async trigger(): Promise<void> {
+    async trigger(date: DateTime): Promise<void> {
         const journal = await readJournalOrNew(this.configuration.journalFile);
         const recoveryPath = journal.getRecoveryPath();
         for(const file of recoveryPath) {
@@ -23,6 +25,13 @@ export class Restore extends BackupManagerCommand {
                 throw new Error(`Unsupported backup file type ${file.fileName.type}`);
             }
         }
+
+        logger.info(`Forcing full backup after restore...`);
+        const backup = new Backup({
+            ...this.configuration,
+            forceFullBackup: true,
+        });
+        await backup.trigger(date);
     }
 
     private async restoreDump(file: BackupFile) {
@@ -66,7 +75,9 @@ export class Restore extends BackupManagerCommand {
             fullDumpConfiguration.database
         ];
 
-        await this.loadAndPipe(file, handler => this.configuration.shell.spawn("psql", parameters, handler));
+        await this.loadAndPipe(file, handler => this.configuration.shell.spawn("psql", parameters, handler, {
+            PGAPPNAME: APP_NAME
+        }));
     }
 }
 

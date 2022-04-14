@@ -6,12 +6,22 @@ const transports = [
 
 type LogLevel = 'info' | 'debug' | 'warn' | 'error';
 
-const LOG_LEVEL: LogLevel = "info"
+const VALID_LOG_LEVELS: LogLevel[] = [ 'info', 'debug', 'warn', 'error' ];
+
+let LOG_LEVEL: LogLevel = "info";
+
+export function setLogLevel(level: string) {
+    if(VALID_LOG_LEVELS.includes(level as LogLevel)) {
+        LOG_LEVEL = level as LogLevel;
+    } else {
+        LOG_LEVEL = "info";
+    }
+}
 
 class Log {
     private static _logger: Logger | undefined;
 
-    private static create(): Logger {
+    private static create(level: LogLevel): Logger {
         this._logger = createLogger({
             format: format.combine(
                 format.splat(),
@@ -21,17 +31,17 @@ class Log {
                 }),
                 format.printf(info => `${ info.timestamp } ${ info.level }: ${ info.message }` + (info.splat !== undefined ? `${ info.splat }` : " "))
             ),
-            level: LOG_LEVEL,
+            level,
             transports,
             exitOnError: false,
             exceptionHandlers: transports,
         });
-        this._logger.log(LOG_LEVEL, "Log Level: %s", LOG_LEVEL)
+        this._logger.log("debug", "Log Level: %s", level)
         return this._logger;
     }
 
     static get logger(): Logger {
-        return this._logger || this.create();
+        return this._logger || this.create(LOG_LEVEL);
     }
 }
 

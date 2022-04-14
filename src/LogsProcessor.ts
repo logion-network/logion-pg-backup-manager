@@ -1,7 +1,8 @@
+import csv from 'csv-parser';
 import fs from 'fs';
 import { readdir } from 'fs/promises';
 import path from 'path';
-import csv from 'csv-parser';
+
 import { SqlGenerator } from './SqlGenerator';
 
 export type SqlSink = (sql: string | undefined) => Promise<void>;
