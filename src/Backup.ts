@@ -46,6 +46,7 @@ export class Backup extends BackupManagerCommand {
             if(!this.configuration.forceFullBackup) {
                 const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
                 for(const file of toRemove) {
+                    logger.info(`Clean-up: removing ${file.fileName.fileName} from IPFS...`);
                     this.configuration.fileManager.removeFileFromIpfs(file.cid);
                 }
             }

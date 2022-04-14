@@ -50,8 +50,11 @@ export class BackupFileName {
             });
         } else if(fileName.startsWith(FULL_LEGACY_BACKUP_FILE_NAME_PREFIX)) {
             const dateString = fileName.substring(FULL_LEGACY_BACKUP_FILE_NAME_PREFIX.length, FULL_LEGACY_BACKUP_FILE_NAME_PREFIX.length + LEGACY_DATE_LENGTH);
+            const timeString = fileName.substring(FULL_LEGACY_BACKUP_FILE_NAME_PREFIX.length + LEGACY_DATE_LENGTH + 1, fileName.length - 8);
+            const timeElements = timeString.split("-");
+            const dateTimeString = `${dateString}T${timeElements.join(":")}`;
             return new BackupFileName({
-                date: DateTime.fromISO(dateString, {zone: 'utc'}),
+                date: DateTime.fromISO(dateTimeString, {zone: 'utc'}),
                 type: 'FULL_LEGACY'
             });
         } else {
@@ -74,6 +77,10 @@ export class BackupFileName {
     get fileName(): string {
         if(this.type === 'FULL') {
             return `${this.date.toISO()}${FULL_BACKUP_FILE_NAME_SUFFIX}`;
+        } else if(this.type === 'FULL_LEGACY') {
+            const isoDate = this.date.toISO();
+            const legacyDate = isoDate.slice(0, isoDate.length - 8).replace("T", "-").replace(":", "-");
+            return `${FULL_LEGACY_BACKUP_FILE_NAME_PREFIX}${legacyDate}.sql.enc`;
         } else {
             return `${this.date.toISO()}${DELTA_BACKUP_FILE_NAME_SUFFIX}`;
         }

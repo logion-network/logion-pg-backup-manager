@@ -17,10 +17,10 @@ describe("BackupFileName", () => {
         expect(fileName.type).toEqual('DELTA');
     });
 
-    it("parses full backup legacy file name", () => {
-        const dateTime = DateTime.now();
-        const fileName = BackupFileName.parse(`dump_${dateTime.toISODate()}-01-00-01.sql.enc`);
-        expect(fileName.date).toEqual(DateTime.fromISO(dateTime.toISODate(), {zone: 'utc'}));
+    it("parses full legacy backup file name", () => {
+        const date = DateTime.fromISO("2022-04-07T14:56:14", {zone: 'utc'});
+        const fileName = BackupFileName.parse(`dump_2022-04-07-14-56-14.sql.enc`);
+        expect(fileName.date).toEqual(date);
         expect(fileName.type).toEqual('FULL_LEGACY');
     });
 
@@ -40,6 +40,15 @@ describe("BackupFileName", () => {
             type: 'DELTA'
         });
         expect(backupFileName.fileName).toBe(`${date.toISO()}-delta.sql.enc`);
+    });
+
+    it("generates full legacy backup file name", () => {
+        const date = DateTime.fromISO("2022-04-07T14:56:14", {zone: 'utc'});
+        const backupFileName = new BackupFileName({
+            date,
+            type: 'FULL_LEGACY'
+        });
+        expect(backupFileName.fileName).toBe(`dump_2022-04-07-14-56.sql.enc`);
     });
 });
 
@@ -91,11 +100,11 @@ describe("Journal", () => {
         const expectedBackupFiles = [
             new BackupFile({
                 cid: "cid0",
-                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-07T00:00:00.000", {zone: 'utc'}))
+                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-07T01:00:01.000", {zone: 'utc'}))
             }),
             new BackupFile({
                 cid: "cid1",
-                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-08T00:00:00.000", {zone: 'utc'}))
+                fileName: BackupFileName.getLegacyFullBackupFileName(DateTime.fromISO("2022-04-08T01:00:01.000", {zone: 'utc'}))
             }),
             new BackupFile({
                 cid: "cid2",
