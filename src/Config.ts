@@ -35,6 +35,7 @@ export function buildBackupManagerFromConfig(): BackupManager {
         secure: process.env.SMTP_SECURE !== "false",
         logger: process.env.SMTP_LOGGER === "true",
         enabled: process.env.SMTP_ENABLED === "true",
+        subjectPrefix: process.env.MAIL_SUBJECT_PREFIX || "",
     });
     const fileManagerConfiguration: DefaultFileManagerConfiguration = {
         shell,

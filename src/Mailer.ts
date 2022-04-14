@@ -15,6 +15,7 @@ export interface MailMessage {
 export interface MailerConfiguration extends TransportOptions {
     from: string;
     enabled: boolean;
+    subjectPrefix: string;
 }
 
 export class Mailer {
@@ -26,8 +27,14 @@ export class Mailer {
     private readonly configuration: MailerConfiguration;
 
     async sendMail(message: MailMessage) {
+        let subject;
+        if(this.configuration.subjectPrefix) {
+            subject = `${this.configuration.subjectPrefix} ${message.subject}`;
+        } else {
+            subject = message.subject;
+        }
         if(!this.configuration.enabled) {
-            logger.info(`[Mailer disabled] Subject: ${message.subject}`);
+            logger.info(`[Mailer disabled] Subject: ${subject}`);
             logger.info(`[Mailer disabled] Body: ${message.text}`);
             if(message.attachments) {
                 for(let i = 0; i < message.attachments.length; ++i) {
@@ -39,6 +46,7 @@ export class Mailer {
         const transport = createTransport(this.configuration);
         const mail: Mail.Options = {
             ...message,
+            subject,
             from: this.configuration.from,
         }
         await transport.sendMail(mail);
