@@ -20,20 +20,15 @@ async function main() {
     const doBackup = async () => {
         if (!running) {
             running = true;
+            const now = DateTime.now().set({millisecond: 0});
             try {
-                const now = DateTime.now().set({millisecond: 0});
                 logger.info(`Triggering at ${now.toISO()}...`);
                 await backupManager.trigger(now);
             } catch (e: any) {
                 logger.error(e.message);
                 logger.error(e.stack);
 
-                const mailer = backupManager.configuration.mailer;
-                await mailer.sendMail({
-                    to: backupManager.configuration.mailTo,
-                    subject: "Backup failure",
-                    text: `Unable to create backup, see logs for more information: ${e.message}`
-                });
+                await backupManager.notifyFailure(now, e);
             } finally {
                 running = false;
             }

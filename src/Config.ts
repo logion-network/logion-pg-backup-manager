@@ -61,6 +61,7 @@ export function buildBackupManagerFromConfig(): BackupManager {
         triggerCron: process.env.TRIGGER_CRON!,
         commandFile: path.join(workingDirectory, 'command.txt'),
         forceFullBackup: false,
+        errorFile: path.join(workingDirectory, 'error.txt'),
     };
     return new BackupManager(backupManagerConfiguration);
 }

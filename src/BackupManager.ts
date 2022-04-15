@@ -14,6 +14,10 @@ export const DEFAULT_COMMAND_NAME: CommandName = "Default";
 
 export const COMMAND_NAMES: CommandName[] = [ DEFAULT_COMMAND_NAME, "Backup", "Restore" ];
 
+export const ERROR_FLAG_SET = "1";
+
+export const ERROR_FLAG_UNSET = "0";
+
 export class BackupManager {
 
     constructor(configuration: BackupManagerConfiguration) {
@@ -40,6 +44,9 @@ export class BackupManager {
             logger.info("Resetting command file...");
             await this.resetCommandFile();
         }
+
+        logger.info("Resetting error flag...");
+        await this.setErrorFlag(false);
     }
 
     private async readCommandName(): Promise<string> {
@@ -64,8 +71,52 @@ export class BackupManager {
     }
 
     private async resetCommandFile() {
-        const file = await open(this.configuration.commandFile, 'w');
-        await file.write(DEFAULT_COMMAND_NAME, null, "utf-8");
+        await this.resetFile(this.configuration.commandFile, DEFAULT_COMMAND_NAME);
+    }
+
+    private async resetFile(path: string, content: string) {
+        const file = await open(path, 'w');
+        await file.write(content, null, "utf-8");
         await file.close();
+    }
+
+    async notifyFailure(dateTime: DateTime, error: any) {
+        const errorFlag = await this.readErrorFlag();
+        if(!errorFlag) {
+            await this.setErrorFlag(true);
+            const mailer = this.configuration.mailer;
+            try {
+                await mailer.sendMail({
+                    to: this.configuration.mailTo,
+                    subject: "Backup manager failure",
+                    text: `Trigger failed on ${dateTime.toISO()}, see logs for more information (${error.message}).`
+                });
+            } catch(notifyError: any) {
+                logger.error(`Failed notifying error: ${notifyError.message}`)
+            }
+        } else {
+            logger.info(`Error already notified: ${error.message}`);
+        }
+    }
+
+    private async readErrorFlag(): Promise<boolean> {
+        let file: FileHandle;
+        try {
+            file = await open(this.configuration.errorFile, 'r');
+        } catch {
+            return false;
+        }
+
+        try {
+            const content = await file.readFile({encoding: "utf-8"});
+            const errorFlag = content.trim();
+            return errorFlag === ERROR_FLAG_SET;
+        } finally {
+            await file.close();
+        }
+    }
+
+    private async setErrorFlag(flag: boolean) {
+        await this.resetFile(this.configuration.errorFile, flag ? ERROR_FLAG_SET : ERROR_FLAG_UNSET);
     }
 }

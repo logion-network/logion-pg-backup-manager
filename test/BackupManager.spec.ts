@@ -4,7 +4,7 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, CommandName } from "../src/BackupManager";
+import { BackupManager, CommandName, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
 import { EncryptedFileWriter } from "../src/EncryptedFile";
 import { FileManager } from "../src/FileManager";
@@ -26,6 +26,7 @@ const cid = "cid0";
 let mailer: Mock<Mailer>;
 const mailTo = "john.doe@logion.network";
 const commandFile = path.join(workingDirectory, "command");
+const errorFile = path.join(workingDirectory, "error");
 
 describe("BackupManager", () => {
 
@@ -57,6 +58,7 @@ describe("BackupManager", () => {
             triggerCron: "* * * * * *",
             commandFile,
             forceFullBackup: false,
+            errorFile,
         };
 
         await setCommand("Default");
@@ -126,6 +128,42 @@ describe("BackupManager", () => {
 
         const postRestoreBackupFile = path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName);
         fileManager.verify(instance => instance.moveToIpfs(postRestoreBackupFile), Times.Once());
+    });
+
+    it("sends failure notification if no error file", async () => {
+        await rm(errorFile, {force: true});
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.notifyFailure(DateTime.now(), new Error());
+        verifyFailureNotificationSent(true);
+        await verifyErrorFlagSet(true);
+    });
+
+    it("sends failure notification if error flag unset", async () => {
+        await setErrorFlag(false);
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.notifyFailure(DateTime.now(), new Error());
+        verifyFailureNotificationSent(true);
+        await verifyErrorFlagSet(true);
+    });
+
+    it("does not send failure notification if error flag set", async () => {
+        await setErrorFlag(true);
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.notifyFailure(DateTime.now(), new Error());
+        verifyFailureNotificationSent(false);
+        await verifyErrorFlagSet(true);
+    });
+
+    it("unsets error flag after successful command execution", async () => {
+        const now = DateTime.now();
+        await setErrorFlag(true);
+        await addFullBackupToJournal(now.minus({hours: 1}));
+        fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid"));
+        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.trigger(now);
+        verifyFailureNotificationSent(false);
+        await verifyErrorFlagSet(false);
     });
 });
 
@@ -247,4 +285,29 @@ function psqlOptions(parameters: string[]): boolean {
         fullDumpConfiguration.database
     ];
     return parameters.every((value, index) => value === expectedParameters[index]);
+}
+
+async function setErrorFlag(errorFlag: boolean) {
+    const file = await open(errorFile, 'w');
+    await file.write(errorFlag ? ERROR_FLAG_SET : ERROR_FLAG_UNSET);
+    await file.close();
+}
+
+function verifyFailureNotificationSent(expectSent: boolean) {
+    if(expectSent) {
+        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure")), Times.Once());
+    } else {
+        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure")), Times.Never());
+    }
+}
+
+async function verifyErrorFlagSet(expectSet: boolean) {
+    const file = await open(errorFile, 'r');
+    const content = await file.readFile('utf-8');
+    await file.close();
+    if(expectSet) {
+        expect(content).toBe(ERROR_FLAG_SET);
+    } else {
+        expect(content).toBe(ERROR_FLAG_UNSET);
+    }
 }
