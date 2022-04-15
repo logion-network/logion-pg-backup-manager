@@ -1,0 +1,52 @@
+#
+# WARNING: This Docker Compose is provided as an example and must not be used in production.
+#
+
+version: "3.6"
+services:
+  private-database:
+    image: postgres:12
+    ports:
+      - 127.0.0.1:5432:5432
+    environment:
+      - POSTGRES_PASSWORD=secret
+    volumes:
+      - ./db_data:/var/lib/postgresql/data/
+      - ./samples/postgres.conf:/etc/postgresql/postgresql.conf
+    command: [ "-c",  "config_file=/etc/postgresql/postgresql.conf" ]
+  lpbm:
+    image: logionnetwork/logion-pg-backup-manager:latest
+    depends_on:
+      - private-database
+      - ipfs-cluster
+    environment:
+      - ENC_PASSWORD=secret
+      - LOG_DIRECTORY=/opt/logion-pg-backup-manager/log/
+      - PG_USER=postgres
+      - PG_DATABASE=postgres
+      - PG_HOST=private-database
+      - IPFS_CLUSTER_HOST=/dns4/ipfs-cluster/tcp/9094
+      - IPFS_HOST=/dns4/ipfs/tcp/5001
+      - TRIGGER_CRON=*/10 * * * * *
+      - IPFS_MIN_REPLICA=1
+      - IPFS_MAX_REPLICA=1
+      - SMTP_ENABLED=false
+      - MAX_FULL_BACKUPS=2
+      - MAX_DURATION_SINCE_LAST_FULL_BACKUP=01:00
+    volumes:
+      - ./db_backup:/opt/logion-pg-backup-manager/work
+      - ./db_data/log:/opt/logion-pg-backup-manager/log/
+      - ./samples/.pgpass:/root/.pgpass
+  ipfs:
+    image: ipfs/go-ipfs:v0.12.0
+  ipfs-cluster:
+    image: ipfs/ipfs-cluster:v0.14.5
+    depends_on:
+      - ipfs
+    environment:
+      CLUSTER_PEERNAME: ipfs-cluster
+      CLUSTER_SECRET: ""
+      CLUSTER_IPFSHTTP_NODEMULTIADDRESS: /dns4/ipfs/tcp/5001
+      CLUSTER_CRDT_TRUSTEDPEERS: '*'
+      CLUSTER_RESTAPI_HTTPLISTENMULTIADDRESS: /ip4/0.0.0.0/tcp/9094
+      CLUSTER_MONITORPINGINTERVAL: 2s
