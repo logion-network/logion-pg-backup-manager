@@ -26,7 +26,7 @@ export class LogsProcessor {
     async process(directory: string): Promise<void> {
         const files = await readdir(directory);
         files.sort((a, b) => a.localeCompare(b));
-        for (let i = 0; i < files.length - 2; ++i) {
+        for (let i = 0; i < files.length - 2; ++i) { // The last 2 files are logs which are not yet rotated
             const file = files[i];
             const filePath = path.join(directory, file);
             if(file.endsWith(".csv")) {
