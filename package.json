@@ -49,5 +49,6 @@
     "node-schedule": "^2.1.0",
     "nodemailer": "^6.7.3",
     "winston": "^3.7.2"
-  }
+  },
+  "packageManager": "yarn@3.2.2"
 }

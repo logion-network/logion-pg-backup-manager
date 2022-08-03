@@ -1,7 +1,7 @@
 FROM node:16 AS build
 WORKDIR /build
 COPY . .
-RUN yarn
+RUN yarn install --immutable
 RUN yarn build
 
 FROM logionnetwork/logion-pg-backup-manager-base:v1
