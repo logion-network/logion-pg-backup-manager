@@ -26,7 +26,8 @@ export class SqlGenerator {
         logger.debug(`commandTag=${commandTag} errorSeverity=${errorSeverity} message=${message} applicationName=${applicationName}`);
         if(!commandTag
                 || errorSeverity !== "LOG"
-                || IGNORED_APPLICATIONS.includes(applicationName)) {
+                || IGNORED_APPLICATIONS.includes(applicationName)
+                || this.isErrorMessage(message)) {
             return undefined;
         } else if(message.startsWith(STATEMENT_PREFIX)) {
             const query = message.substring(STATEMENT_PREFIX.length);
@@ -47,5 +48,9 @@ export class SqlGenerator {
             resolvedQuery = resolvedQuery.replace(parameter, parameters[parameter]);
         }
         return resolvedQuery;
+    }
+
+    isErrorMessage(message: string): boolean {
+        return /Connection reset by peer/i.test(message);
     }
 }
