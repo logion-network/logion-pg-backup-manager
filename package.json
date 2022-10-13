@@ -1,6 +1,6 @@
 {
   "name": "logion-pg-backup-streamer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Converts Postgres CSV logs into encrypted SQL files and stores them into IPFS.",
   "main": "dist/index.js",
   "scripts": {
