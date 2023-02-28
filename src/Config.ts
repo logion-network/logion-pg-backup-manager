@@ -1,5 +1,4 @@
 import { mkdirSync } from 'fs';
-import { Duration } from 'luxon';
 import path from 'path';
 
 import { BackupManager } from "./BackupManager";
@@ -51,7 +50,6 @@ export function buildBackupManagerFromConfig(): BackupManager {
         logDirectory,
         password: process.env.ENC_PASSWORD!,
         workingDirectory,
-        maxDurationSinceLastFullBackup: Duration.fromISOTime(process.env.MAX_DURATION_SINCE_LAST_FULL_BACKUP!),
         fullDumpConfiguration,
         shell,
         journalFile: path.join(workingDirectory, 'journal.txt'),
@@ -59,8 +57,10 @@ export function buildBackupManagerFromConfig(): BackupManager {
         mailer,
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
+        fullBackupTriggerCron: process.env.FULL_BACKUP_TRIGGER_CRON!,
         commandFile: path.join(workingDirectory, 'command.txt'),
         forceFullBackup: false,
+        periodicFullBackup: false,
         errorFile: path.join(workingDirectory, 'error.txt'),
     };
     return new BackupManager(backupManagerConfiguration);

@@ -3,11 +3,14 @@ import { DateTime } from "luxon";
 import schedule from 'node-schedule';
 
 import { getLogger, setLogLevel } from './util/Log';
+import { BackupManager } from "./BackupManager.js";
 
 dotenv.config()
 
 setLogLevel(process.env.LOG_LEVEL || "info");
 main();
+
+type JobName = 'Idle' | 'Backup' | 'TriggerFullBackup';
 
 async function main() {
     const logger = getLogger();
@@ -16,22 +19,34 @@ async function main() {
 
     const backupManager = buildBackupManagerFromConfig();
 
-    let running = false;
-    const doBackup = async () => {
-        if (!running) {
-            running = true;
-            const now = DateTime.now().set({millisecond: 0});
-            try {
-                logger.info(`Triggering at ${now.toISO()}...`);
-                await backupManager.trigger(now);
-            } catch (e: any) {
-                logger.error(e.message);
-                logger.error(e.stack);
+    let running: JobName = 'Idle';
+    const doJob = async (jobName: JobName, trigger: (backupManager: BackupManager, dateTime: DateTime) => Promise<void>) => {
+        running = jobName;
+        const now = DateTime.now().set({ millisecond: 0 });
+        try {
+            logger.info(`Triggering ${ jobName } at ${ now.toISO() }...`);
+            await trigger(backupManager, now);
+        } catch (e: any) {
+            logger.error(e.message);
+            logger.error(e.stack);
 
-                await backupManager.notifyFailure(now, e);
-            } finally {
-                running = false;
-            }
+            await backupManager.notifyFailure(jobName, now, e);
+        } finally {
+            running = 'Idle';
+        }
+    };
+
+    const doBackup = async () => {
+        if (running === 'Idle') {
+            await doJob('Backup', (backupManager, now) => backupManager.trigger(now))
+        } else {
+            return Promise.resolve();
+        }
+    };
+
+    const triggerFullBackup = async () => {
+        if (running !== 'TriggerFullBackup') {
+            await doJob('TriggerFullBackup', backupManager => backupManager.triggerFullBackup())
         } else {
             return Promise.resolve();
         }
@@ -43,6 +58,9 @@ async function main() {
     logger.info("************************************");
     logger.info("");
 
-    logger.info(`Trigger schedule: ${backupManager.configuration.triggerCron}`);
+    logger.info(`Trigger schedule: ${ backupManager.configuration.triggerCron }`);
     schedule.scheduleJob(backupManager.configuration.triggerCron, doBackup);
+
+    logger.info(`Full Backup Trigger schedule: ${ backupManager.configuration.fullBackupTriggerCron }`);
+    schedule.scheduleJob(backupManager.configuration.fullBackupTriggerCron, triggerFullBackup);
 }

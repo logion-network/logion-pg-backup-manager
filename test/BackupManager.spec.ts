@@ -1,5 +1,5 @@
 import { mkdir, open, rm } from "fs/promises";
-import { DateTime, Duration } from "luxon";
+import { DateTime } from "luxon";
 import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
@@ -48,7 +48,6 @@ describe("BackupManager", () => {
             logDirectory: "sample_logs",
             password: "secret",
             workingDirectory,
-            maxDurationSinceLastFullBackup: Duration.fromISOTime("24:00"),
             fullDumpConfiguration,
             shell: shell.object(),
             journalFile,
@@ -56,8 +55,10 @@ describe("BackupManager", () => {
             mailer: mailer.object(),
             mailTo,
             triggerCron: "* * * * * *",
+            fullBackupTriggerCron: "* * * * * *",
             commandFile,
             forceFullBackup: false,
+            periodicFullBackup: false,
             errorFile,
         };
 
@@ -87,16 +88,18 @@ describe("BackupManager", () => {
         await testCreatesFullBackup(now);
     });
 
-    it("creates full with too old full backup", async () => {
-        let now = DateTime.now();
-        const file = await addFullBackupToJournal(now.minus({hours: 25}));
-        await testCreatesFullBackup(now, file.cid);
-    });
-
     it("creates full with only legacy backup", async () => {
         let now = DateTime.now();
         const file = await addFullLegacyBackupToJournal(now);
         await testCreatesFullBackup(now, file.cid);
+    });
+
+    it("creates full with command", async () => {
+        let now = DateTime.now();
+        await addFullBackupToJournal(now.minus({hours: 2}));
+        const delta = await addDeltaBackupToJournal(now.minus({hours: 1}));
+        await setCommand("FullBackup");
+        await testCreatesFullBackup(now, delta.cid);
     });
 
     it("restores", async () => {
@@ -133,7 +136,7 @@ describe("BackupManager", () => {
     it("sends failure notification if no error file", async () => {
         await rm(errorFile, {force: true});
         const manager = new BackupManager(backupManagerConfiguration);
-        await manager.notifyFailure(DateTime.now(), new Error());
+        await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
         await verifyErrorFlagSet(true);
     });
@@ -141,7 +144,7 @@ describe("BackupManager", () => {
     it("sends failure notification if error flag unset", async () => {
         await setErrorFlag(false);
         const manager = new BackupManager(backupManagerConfiguration);
-        await manager.notifyFailure(DateTime.now(), new Error());
+        await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
         await verifyErrorFlagSet(true);
     });
@@ -149,7 +152,7 @@ describe("BackupManager", () => {
     it("does not send failure notification if error flag set", async () => {
         await setErrorFlag(true);
         const manager = new BackupManager(backupManagerConfiguration);
-        await manager.notifyFailure(DateTime.now(), new Error());
+        await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(false);
         await verifyErrorFlagSet(true);
     });
@@ -214,7 +217,7 @@ async function testCreatesFullBackup(now: DateTime, removedBackupCid?: string) {
     verifyMailSent();
 }
 
-function fullBackupSpawnMock(command: string, parameters: string[], handler: ProcessHandler): Promise<void> {
+function fullBackupSpawnMock(command: string, parameters: string[], _handler: ProcessHandler): Promise<void> {
     const expectedParameters = [
         '-F', 'c',
         '-h', fullDumpConfiguration.host,
@@ -295,9 +298,9 @@ async function setErrorFlag(errorFlag: boolean) {
 
 function verifyFailureNotificationSent(expectSent: boolean) {
     if(expectSent) {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure")), Times.Once());
+        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Once());
     } else {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure")), Times.Never());
+        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Never());
     }
 }
 

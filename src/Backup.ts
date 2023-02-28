@@ -22,7 +22,7 @@ export class Backup extends BackupManagerCommand {
         let deltaBackupResult: DeltaBackupResult | undefined = undefined;
         if(this.configuration.forceFullBackup
                 || lastFullBackup === undefined
-                || date.diff(lastFullBackup.fileName.date) > this.configuration.maxDurationSinceLastFullBackup) {
+                || this.configuration.periodicFullBackup) {
             logger.info("Producing full backup...");
             backupFile = BackupFileName.getFullBackupFileName(date);
             backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);

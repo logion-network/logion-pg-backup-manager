@@ -8,11 +8,11 @@ import { Restore } from "./Restore";
 
 const logger = getLogger();
 
-export type CommandName = "Default" | "Backup" | "Restore";
+export type CommandName = "Default" | "Backup" | "FullBackup" | "Restore";
 
 export const DEFAULT_COMMAND_NAME: CommandName = "Default";
 
-export const COMMAND_NAMES: CommandName[] = [ DEFAULT_COMMAND_NAME, "Backup", "Restore" ];
+export const COMMAND_NAMES: CommandName[] = [ DEFAULT_COMMAND_NAME, "Backup", "FullBackup", "Restore" ];
 
 export const ERROR_FLAG_SET = "1";
 
@@ -31,19 +31,24 @@ export class BackupManager {
         let commandName: string = await this.readCommandName();
         if(commandName === "Backup" || commandName === DEFAULT_COMMAND_NAME) {
             command = new Backup(this.configuration);
+        } else if(commandName === "FullBackup") {
+            command = new Backup({
+                ...this.configuration,
+                periodicFullBackup: true
+            });
         } else if(commandName === "Restore") {
             command = new Restore(this.configuration);
         } else {
             throw new Error(`Unsupported command ${commandName}`);
         }
 
-        logger.info(`Executing ${commandName} command...`);
-        await command.trigger(date);
-
         if(commandName !== DEFAULT_COMMAND_NAME) {
             logger.info("Resetting command file...");
             await this.resetCommandFile();
         }
+
+        logger.info(`Executing ${commandName} command...`);
+        await command.trigger(date);
 
         logger.info("Resetting error flag...");
         await this.setErrorFlag(false);
@@ -70,8 +75,12 @@ export class BackupManager {
         }
     }
 
-    private async resetCommandFile() {
-        await this.resetFile(this.configuration.commandFile, DEFAULT_COMMAND_NAME);
+    async triggerFullBackup() {
+        await this.resetCommandFile("FullBackup");
+    }
+
+    private async resetCommandFile(commandName: CommandName = DEFAULT_COMMAND_NAME) {
+        await this.resetFile(this.configuration.commandFile, commandName);
     }
 
     private async resetFile(path: string, content: string) {
@@ -80,7 +89,7 @@ export class BackupManager {
         await file.close();
     }
 
-    async notifyFailure(dateTime: DateTime, error: any) {
+    async notifyFailure(jobName: string, dateTime: DateTime, error: any) {
         const errorFlag = await this.readErrorFlag();
         if(!errorFlag) {
             await this.setErrorFlag(true);
@@ -88,7 +97,7 @@ export class BackupManager {
             try {
                 await mailer.sendMail({
                     to: this.configuration.mailTo,
-                    subject: "Backup manager failure",
+                    subject: `Backup manager failure: ${ jobName }`,
                     text: `Trigger failed on ${dateTime.toISO()}, see logs for more information (${error.message}).`
                 });
             } catch(notifyError: any) {
