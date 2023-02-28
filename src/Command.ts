@@ -1,4 +1,4 @@
-import { DateTime, Duration } from "luxon";
+import { DateTime } from "luxon";
 import { FileManager } from "./FileManager";
 import { Mailer } from "./Mailer";
 import { Shell } from "./Shell";
@@ -16,7 +16,6 @@ export interface BackupManagerConfiguration {
     readonly logDirectory: string;
     readonly fileManager: FileManager;
     readonly password: string;
-    readonly maxDurationSinceLastFullBackup: Duration;
     readonly shell: Shell;
     readonly fullDumpConfiguration: FullDumpConfiguration;
     readonly journalFile: string;
@@ -24,8 +23,10 @@ export interface BackupManagerConfiguration {
     readonly mailer: Mailer;
     readonly mailTo: string;
     readonly triggerCron: string;
+    readonly fullBackupTriggerCron: string;
     readonly commandFile: string;
     readonly forceFullBackup: boolean;
+    readonly periodicFullBackup: boolean;
     readonly errorFile: string;
 }
 

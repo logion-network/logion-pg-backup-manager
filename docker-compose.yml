@@ -28,11 +28,11 @@ services:
       - IPFS_CLUSTER_HOST=/dns4/ipfs-cluster/tcp/9094
       - IPFS_HOST=/dns4/ipfs/tcp/5001
       - TRIGGER_CRON=*/10 * * * * *
+      - FULL_BACKUP_TRIGGER_CRON=59 59 0 * * *
       - IPFS_MIN_REPLICA=1
       - IPFS_MAX_REPLICA=1
       - SMTP_ENABLED=false
       - MAX_FULL_BACKUPS=2
-      - MAX_DURATION_SINCE_LAST_FULL_BACKUP=01:00
     volumes:
       - ./db_backup:/opt/logion-pg-backup-manager/work
       - ./db_data/log:/opt/logion-pg-backup-manager/log/

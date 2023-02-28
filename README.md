@@ -20,6 +20,8 @@ access (sudo), you may be prompted for your superuser password.
 5. Execute a destroy/restore cycle by running `./scripts/restore_demo.sh`.
 6. Follow LPBM's logs with `docker-compose logs -f lpbm` and see that the state was restored.
 7. Connect to the DB and see that the latest state was restored.
+8. (Optional) A full backup is created initially (when there is no journal yet), and once a day (according to config). But a full backup can be triggered any time by running `./scripts/full_backup_demo.sh`. 
+
 
 In order to clean-up, you should execute `./scripts/down.sh`.
 
@@ -88,9 +90,8 @@ LPBM reads its configuration from the environment variables are listed below.
 - `IPFS`: the path to the `ipfs` executable.
 - `IPFS_HOST`: the host to use with `ipfs`.
 - `TRIGGER_CRON`: the CRON expression telling when LPBM should be triggered (e.g. */10 * * * * * means every 10 seconds).
+- `FULL_BACKUP_TRIGGER_CRON`: the CRON expression telling when LPBM should perform a full backup instead of an incremental one, at the next trigger (e.g. 59 58 0 * * * means every day at 00:59:59).
 - `MAX_FULL_BACKUPS`: the maximum number of full backups to keep (keeping more than 1 enables to restore previous states).
-- `MAX_DURATION_SINCE_LAST_FULL_BACKUP`: the duration between 2 full backups provided as a valid ISO 8601 duration string
-  (e.g. 23:59 for 23 hours and 59 minutes).
 - `LOG_LEVEL`: the log level (can be one of `info`, `debug`, `warn` or `error`).
 
 Note that if the PostgreSQL connection requires a password, it must be set in the [PGPASS file](https://www.postgresql.org/docs/current/libpq-pgpass.html).
