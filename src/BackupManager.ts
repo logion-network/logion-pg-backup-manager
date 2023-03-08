@@ -26,26 +26,26 @@ export class BackupManager {
         const command = await this.buildCommand();
         const commandName = command.name;
         if(commandName === Restore.NAME) {
-            await this.configuration.commandFile.resetCommandFile(Pause.NAME);
+            await this.configuration.commandFile.setCommandName(Pause.NAME);
         } else if(commandName !== DEFAULT_COMMAND_NAME && commandName !== Pause.NAME) {
             logger.info("Resetting command file...");
-            await this.configuration.commandFile.resetCommandFile(Backup.NAME);
+            await this.configuration.commandFile.setCommandName(Backup.NAME);
         }
 
         logger.info(`Executing ${commandName} command...`);
         await command.trigger(date);
 
         logger.info("Resetting error flag...");
-        await this.configuration.errorFile.setErrorFlag("None");
+        await this.configuration.errorFile.setErrorState("None");
     }
 
     private async handleFailedEmail(dateTime: DateTime) {
-        const errorState = await this.configuration.errorFile.readErrorFlag();
+        const errorState = await this.configuration.errorFile.getErrorState();
         if(errorState === "EmailJournalFailure") {
             logger.info("Retrying to send journal...");
             try {
                 await this.configuration.mailer.sendJournalMail(this.configuration.mailTo, this.configuration.journal);
-                await this.configuration.errorFile.setErrorFlag("None");
+                await this.configuration.errorFile.setErrorState("None");
             } catch(e) {
                 logger.error("Failed to send journal on retry");
             }
@@ -58,7 +58,7 @@ export class BackupManager {
                     error: "see logs",
                     jobName: "see logs",
                 });
-                await this.configuration.errorFile.setErrorFlag("BackupFailure");
+                await this.configuration.errorFile.setErrorState("BackupFailure");
             } catch(e) {
                 logger.error("Failed to send failure on retry");
             }
@@ -69,7 +69,7 @@ export class BackupManager {
         if(this.configuration.restoredAndClose) {
             return new Restore(this.configuration);
         } else {
-            const commandName = await this.configuration.commandFile.readCommandName();
+            const commandName = await this.configuration.commandFile.getCommandName();
             const journal = this.configuration.journal;
             if(commandName === FullBackup.NAME || journal.getLastFullBackup() === undefined) {
                 return new FullBackup(this.configuration);
@@ -86,9 +86,9 @@ export class BackupManager {
     }
 
     async notifyFailure(jobName: string, dateTime: DateTime, error: any) {
-        const errorFlag = await this.configuration.errorFile.readErrorFlag();
+        const errorFlag = await this.configuration.errorFile.getErrorState();
         if(errorFlag !== "BackupFailure" && errorFlag !== "EmailErrorFailure") {
-            await this.configuration.errorFile.setErrorFlag("BackupFailure");
+            await this.configuration.errorFile.setErrorState("BackupFailure");
             const mailer = this.configuration.mailer;
             try {
                 await mailer.sendFailureMail({
@@ -99,7 +99,7 @@ export class BackupManager {
                 });
             } catch(notifyError: any) {
                 logger.error(`Failed notifying error: ${notifyError.message}`);
-                await this.configuration.errorFile.setErrorFlag("EmailErrorFailure");
+                await this.configuration.errorFile.setErrorState("EmailErrorFailure");
             }
         } else {
             logger.info(`Error already notified: ${error.message}`);

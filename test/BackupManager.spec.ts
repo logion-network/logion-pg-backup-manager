@@ -87,34 +87,8 @@ describe("BackupManager", () => {
         await testCreatesFullBackup(now, delta.cid);
     });
 
-    it("restores", async () => {
-        let now = DateTime.now();
-        const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
-        const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
-        await setCommand("Restore");
-        await setConfig();
-
-        const manager = new BackupManager(backupManagerConfiguration);
-        fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
-        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
-        fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid2"));
-
-        const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
-        await createEncryptedFile(fullFilePath);
-        const deltaFilePath = path.join(workingDirectory, deltaFile.fileName.fileName);
-        await createEncryptedFile(deltaFilePath);
-
-        shell.setup(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.Is(pgRestoreOptions), It.IsAny())).returns(Promise.resolve());
-        shell.setup(instance => instance.spawn(It.Is(command => command === "psql"), It.Is(psqlOptions), It.IsAny())).returns(Promise.resolve());
-
-        await manager.trigger(now);
-
-        fileManager.verify(instance => instance.downloadFromIpfs(fullFile.cid, fullFilePath), Times.Once());
-        fileManager.verify(instance => instance.deleteFile(fullFilePath), Times.Once());
-
-        fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
-        fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
-    });
+    it("restores", async () => testRestore(false));
+    it("forces restore only with restoreAndClose flag set", async () => testRestore(true));
 
     it("sends failure notification if no error file", async () => {
         await rm(errorFile, {force: true});
@@ -195,7 +169,7 @@ describe("BackupManager", () => {
     });
 });
 
-async function setConfig() {
+async function setConfig(restoredAndClose?: boolean) {
     backupManagerConfiguration = {
         fileManager: fileManager.object(),
         logDirectory: "sample_logs",
@@ -211,6 +185,7 @@ async function setConfig() {
         fullBackupTriggerCron: "* * * * * *",
         commandFile: new CommandFile(commandFile),
         errorFile: new ErrorFile(errorFile),
+        restoredAndClose: restoredAndClose || false,
     };
 }
 
@@ -227,7 +202,7 @@ async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
 }
 
 function verifyMailSent(times?: number) {
-    mailer.verify(instance => instance.sendJournalMail(mailTo, backupManagerConfiguration.journal), Times.Exactly(times || 1));
+    mailer.verify(instance => instance.sendJournalMail(mailTo, backupManagerConfiguration.journal), Times.Exactly(times === undefined ? 1 : times));
 }
 
 async function clearJournal() {
@@ -346,4 +321,48 @@ async function verifyErrorStateIs(expectState: ErrorState) {
     const content = await file.readFile('utf-8');
     await file.close();
     expect(content).toBe(expectState);
+}
+
+async function testRestore(restoreAndClose: boolean) {
+    let now = DateTime.now();
+    const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
+    const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
+    if(!restoreAndClose) {
+        await setCommand("Restore");
+    }
+    await setConfig(restoreAndClose);
+
+    const manager = new BackupManager(backupManagerConfiguration);
+    fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
+    fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+
+    const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
+    await createEncryptedFile(fullFilePath);
+    const deltaFilePath = path.join(workingDirectory, deltaFile.fileName.fileName);
+    await createEncryptedFile(deltaFilePath);
+
+    shell.setup(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.Is(pgRestoreOptions), It.IsAny())).returns(Promise.resolve());
+    shell.setup(instance => instance.spawn(It.Is(command => command === "psql"), It.Is(psqlOptions), It.IsAny())).returns(Promise.resolve());
+
+    await manager.trigger(now);
+
+    fileManager.verify(instance => instance.downloadFromIpfs(fullFile.cid, fullFilePath), Times.Once());
+    fileManager.verify(instance => instance.deleteFile(fullFilePath), Times.Once());
+
+    fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
+    fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
+
+    shell.verify(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.IsAny(), It.IsAny()), Times.Once());
+    shell.verify(instance => instance.spawn(It.Is(command => command === "psql"), It.IsAny(), It.IsAny(), It.IsAny()), Times.Once());
+
+    verifyFailureNotificationSent(false);
+    verifyMailSent(0);
+    await verifyCommandIs("Pause");
+}
+
+async function verifyCommandIs(expectCommand: string) {
+    const file = await open(commandFile, 'r');
+    const content = await file.readFile('utf-8');
+    await file.close();
+    expect(content).toBe(expectCommand);
 }

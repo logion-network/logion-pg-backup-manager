@@ -16,7 +16,7 @@ export class CommandFile {
 
     private file: StateFile;
 
-    async readCommandName(): Promise<string | undefined> {
+    async getCommandName(): Promise<string | undefined> {
         const name = await this.file.readFile();
         if(name === undefined) {
             return undefined;
@@ -29,7 +29,7 @@ export class CommandFile {
         }
     }
 
-    async resetCommandFile(commandName: string) {
+    async setCommandName(commandName: string) {
         await this.file.resetFile(commandName);
     }
 }

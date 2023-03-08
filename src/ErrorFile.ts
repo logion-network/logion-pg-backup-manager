@@ -10,11 +10,11 @@ export class ErrorFile {
 
     private file: StateFile;
 
-    async setErrorFlag(flag: ErrorState) {
+    async setErrorState(flag: ErrorState) {
         await this.file.resetFile(flag);
     }
 
-    async readErrorFlag(): Promise<ErrorState> {
+    async getErrorState(): Promise<ErrorState> {
         const content = await this.file.readFile();
         if(content === undefined
             || content === "0") { // Legacy

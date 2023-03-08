@@ -39,7 +39,7 @@ async function restore(args: {
 }) {
     const { logger, backupManager } = args;
 
-    await backupManager.configuration.commandFile.resetCommandFile("Restore");
+    await backupManager.configuration.commandFile.setCommandName("Restore");
     try {
         await backupManager.trigger(DateTime.now());
     } catch(e: any) {
@@ -66,7 +66,7 @@ async function runService(args: {
             logger.error(e.stack);
 
             if(e instanceof MailerException) {
-                await backupManager.configuration.errorFile.setErrorFlag("EmailJournalFailure");
+                await backupManager.configuration.errorFile.setErrorState("EmailJournalFailure");
             } else {
                 await backupManager.notifyFailure(jobName, now, e);
             }
@@ -85,7 +85,7 @@ async function runService(args: {
 
     const queueFullBackup = async () => {
         if (running !== 'Idle') {
-            await doJob('QueueFullBackup', () => backupManager.configuration.commandFile.resetCommandFile(FullBackup.NAME))
+            await doJob('QueueFullBackup', () => backupManager.configuration.commandFile.setCommandName(FullBackup.NAME))
         } else {
             return Promise.resolve();
         }
