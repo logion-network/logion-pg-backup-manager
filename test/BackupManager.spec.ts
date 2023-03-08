@@ -4,12 +4,14 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/BackupManager";
+import { BackupManager } from "../src/BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
+import { CommandFile } from "../src/CommandFile";
 import { EncryptedFileWriter } from "../src/EncryptedFile";
+import { ErrorFile, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/ErrorFile";
 import { FileManager } from "../src/FileManager";
 import { BackupFile, BackupFileName, Journal } from "../src/Journal";
-import { Mailer, MailMessage } from "../src/Mailer";
+import { Mailer } from "../src/Mailer";
 import { ProcessHandler, Shell } from "../src/Shell";
 
 const workingDirectory = path.join(os.tmpdir(), "backup-manager-test");
@@ -39,7 +41,8 @@ describe("BackupManager", () => {
         fileManager = new Mock<FileManager>();
 
         mailer = new Mock<Mailer>();
-        mailer.setup(instance => instance.sendMail(It.IsAny())).returns(Promise.resolve());
+        mailer.setup(instance => instance.sendJournalMail(It.IsAny(), It.IsAny())).returns(Promise.resolve());
+        mailer.setup(instance => instance.sendFailureMail(It.IsAny())).returns(Promise.resolve());
 
         shell = new Mock<Shell>();
 
@@ -168,8 +171,8 @@ async function setConfig() {
         mailTo,
         triggerCron: "* * * * * *",
         fullBackupTriggerCron: "* * * * * *",
-        commandFile,
-        errorFile,
+        commandFile: new CommandFile(commandFile),
+        errorFile: new ErrorFile(errorFile),
     };
 }
 
@@ -186,15 +189,7 @@ async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
 }
 
 function verifyMailSent() {
-    mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(param =>
-        param.to === mailTo
-        && param.subject === "Backup journal updated"
-        && param.text !== undefined
-        && param.attachments !== undefined
-        && param.attachments.length === 1
-        && param.attachments[0].path === journalFile
-        && param.attachments[0].filename === "journal.txt"
-    )), Times.Exactly(1));
+    mailer.verify(instance => instance.sendJournalMail(mailTo, backupManagerConfiguration.journal), Times.Exactly(1));
 }
 
 async function clearJournal() {
@@ -302,9 +297,9 @@ async function setErrorFlag(errorFlag: boolean) {
 
 function verifyFailureNotificationSent(expectSent: boolean) {
     if(expectSent) {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Once());
+        mailer.verify(instance => instance.sendFailureMail(It.IsAny()), Times.Once());
     } else {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Never());
+        mailer.verify(instance => instance.sendFailureMail(It.IsAny()), Times.Never());
     }
 }
 

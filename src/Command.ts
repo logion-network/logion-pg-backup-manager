@@ -1,4 +1,6 @@
 import { DateTime } from "luxon";
+import { CommandFile } from "./CommandFile";
+import { ErrorFile } from "./ErrorFile";
 import { FileManager } from "./FileManager";
 import { Journal } from "./Journal";
 import { Mailer } from "./Mailer";
@@ -25,8 +27,8 @@ export interface BackupManagerConfiguration {
     readonly mailTo: string;
     readonly triggerCron: string;
     readonly fullBackupTriggerCron: string;
-    readonly commandFile: string;
-    readonly errorFile: string;
+    readonly commandFile: CommandFile;
+    readonly errorFile: ErrorFile;
 }
 
 export abstract class BackupManagerCommand {

@@ -3,6 +3,8 @@ import path from 'path';
 
 import { BackupManager } from "./BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from './Command';
+import { CommandFile } from './CommandFile';
+import { ErrorFile } from './ErrorFile';
 import { DefaultFileManager, DefaultFileManagerConfiguration } from './FileManager';
 import { Journal } from './Journal';
 import { Mailer } from './Mailer';
@@ -59,8 +61,8 @@ export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
         fullBackupTriggerCron: process.env.FULL_BACKUP_TRIGGER_CRON!,
-        commandFile: path.join(workingDirectory, 'command.txt'),
-        errorFile: path.join(workingDirectory, 'error.txt'),
+        commandFile: new CommandFile(path.join(workingDirectory, 'command.txt')),
+        errorFile: new ErrorFile(path.join(workingDirectory, 'error.txt')),
     };
     return new BackupManager(backupManagerConfiguration);
 }

@@ -3,14 +3,14 @@ import { DateTime } from "luxon";
 import schedule from 'node-schedule';
 
 import { getLogger, setLogLevel } from './util/Log';
-import { BackupManager } from "./BackupManager.js";
+import { FullBackup } from './FullBackup';
 
 dotenv.config()
 
 setLogLevel(process.env.LOG_LEVEL || "info");
 main();
 
-type JobName = 'Idle' | 'Backup' | 'TriggerFullBackup';
+type JobName = 'Idle' | 'Backup' | 'QueueFullBackup';
 
 async function main() {
     const logger = getLogger();
@@ -20,12 +20,12 @@ async function main() {
     const backupManager = await buildBackupManagerFromConfig();
 
     let running: JobName = 'Idle';
-    const doJob = async (jobName: JobName, trigger: (backupManager: BackupManager, dateTime: DateTime) => Promise<void>) => {
+    const doJob = async (jobName: JobName, trigger: (dateTime: DateTime) => Promise<void>) => {
         running = jobName;
         const now = DateTime.now().set({ millisecond: 0 });
         try {
             logger.info(`Triggering ${ jobName } at ${ now.toISO() }...`);
-            await trigger(backupManager, now);
+            await trigger(now);
         } catch (e: any) {
             logger.error(e.message);
             logger.error(e.stack);
@@ -38,15 +38,15 @@ async function main() {
 
     const runCommand = async () => {
         if (running === 'Idle') {
-            await doJob('Backup', (backupManager, now) => backupManager.trigger(now))
+            await doJob('Backup', (now) => backupManager.trigger(now))
         } else {
             return Promise.resolve();
         }
     };
 
-    const triggerFullBackup = async () => {
-        if (running !== 'TriggerFullBackup') {
-            await doJob('TriggerFullBackup', backupManager => backupManager.triggerFullBackup())
+    const queueFullBackup = async () => {
+        if (running !== 'Idle') {
+            await doJob('QueueFullBackup', () => backupManager.configuration.commandFile.resetCommandFile(FullBackup.NAME))
         } else {
             return Promise.resolve();
         }
@@ -62,5 +62,5 @@ async function main() {
     schedule.scheduleJob(backupManager.configuration.triggerCron, runCommand);
 
     logger.info(`Full Backup Trigger schedule: ${ backupManager.configuration.fullBackupTriggerCron }`);
-    schedule.scheduleJob(backupManager.configuration.fullBackupTriggerCron, triggerFullBackup);
+    schedule.scheduleJob(backupManager.configuration.fullBackupTriggerCron, queueFullBackup);
 }

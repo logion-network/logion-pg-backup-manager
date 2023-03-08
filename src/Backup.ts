@@ -40,19 +40,6 @@ export class Backup extends BackupManagerCommand {
 
             logger.info("Writing journal...");
             await journal.write();
-            logger.info("Journal successfully written, sending by e-mail...");
-
-            await this.configuration.mailer.sendMail({
-                to: this.configuration.mailTo,
-                subject: "Backup journal updated",
-                text: "New journal file available, see attachment.",
-                attachments: [
-                    {
-                        path: journal.path,
-                        filename: "journal.txt"
-                    }
-                ]
-            });
         } else {
             logger.info("No change detected.");
         }
@@ -60,6 +47,11 @@ export class Backup extends BackupManagerCommand {
         logger.info("Removing processed logs...");
         for(const file of deltaBackupResult.logsToRemove) {
             this.configuration.fileManager.deleteFile(file);
+        }
+
+        if(!deltaBackupResult.emptyDelta) {
+            logger.info("Sending journal by e-mail...");
+            await this.configuration.mailer.sendJournalMail(this.configuration.mailTo, journal);
         }
 
         logger.info("All done.");

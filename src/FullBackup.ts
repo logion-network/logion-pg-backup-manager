@@ -47,17 +47,7 @@ export class FullBackup extends BackupManagerCommand {
         await journal.write();
         logger.info("Journal successfully written, sending by e-mail...");
 
-        await this.configuration.mailer.sendMail({
-            to: this.configuration.mailTo,
-            subject: "Backup journal updated",
-            text: "New journal file available, see attachment.",
-            attachments: [
-                {
-                    path: this.configuration.journal.path,
-                    filename: "journal.txt"
-                }
-            ]
-        });
+        await this.configuration.mailer.sendJournalMail(this.configuration.mailTo, journal);
 
         logger.info("All done.");
     }
