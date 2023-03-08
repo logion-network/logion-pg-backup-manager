@@ -75,12 +75,25 @@ export class Mailer {
             }
             return;
         }
-        const transport = createTransport(this.configuration);
-        const mail: Mail.Options = {
-            ...message,
-            subject,
-            from: this.configuration.from,
+        try {
+            const transport = createTransport(this.configuration);
+            const mail: Mail.Options = {
+                ...message,
+                subject,
+                from: this.configuration.from,
+            }
+            await transport.sendMail(mail);
+        } catch(e: any) {
+            throw new MailerException(e.message);
         }
-        await transport.sendMail(mail);
     }
+}
+
+export class MailerException {
+
+    constructor(message?: string) {
+        this.message = message;
+    }
+
+    readonly message?: string;
 }

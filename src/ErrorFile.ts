@@ -1,8 +1,6 @@
 import { StateFile } from "./StateFile";
 
-export const ERROR_FLAG_SET = "1";
-
-export const ERROR_FLAG_UNSET = "0";
+export type ErrorState = "None" | "BackupFailure" | "EmailJournalFailure" | "EmailErrorFailure";
 
 export class ErrorFile {
 
@@ -12,12 +10,33 @@ export class ErrorFile {
 
     private file: StateFile;
 
-    async setErrorFlag(flag: boolean) {
-        await this.file.resetFile(flag ? ERROR_FLAG_SET : ERROR_FLAG_UNSET);
+    async setErrorFlag(flag: ErrorState) {
+        await this.file.resetFile(flag);
     }
 
-    async readErrorFlag(): Promise<boolean> {
+    async readErrorFlag(): Promise<ErrorState> {
         const content = await this.file.readFile();
-        return content ? content === ERROR_FLAG_SET : false;
+        if(content === undefined
+            || content === "0") { // Legacy
+            return "None";
+        }
+
+        if(content === "1") { // Legacy
+            return "BackupFailure";
+        }
+
+        if(this.isErrorState(content)) {
+            return content;
+        } else {
+            return "None";
+        }
+    }
+
+    private isErrorState(state: string): state is ErrorState {
+        return state === "None"
+            || state === "BackupFailure"
+            || state === "EmailJournalFailure"
+            || state === "EmailErrorFailure"
+        ;
     }
 }

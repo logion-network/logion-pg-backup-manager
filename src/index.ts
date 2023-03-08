@@ -4,6 +4,7 @@ import schedule from 'node-schedule';
 
 import { getLogger, setLogLevel } from './util/Log';
 import { FullBackup } from './FullBackup';
+import { MailerException } from './Mailer';
 
 dotenv.config()
 
@@ -30,7 +31,11 @@ async function main() {
             logger.error(e.message);
             logger.error(e.stack);
 
-            await backupManager.notifyFailure(jobName, now, e);
+            if(e instanceof MailerException) {
+                await backupManager.configuration.errorFile.setErrorFlag("EmailJournalFailure");
+            } else {
+                await backupManager.notifyFailure(jobName, now, e);
+            }
         } finally {
             running = 'Idle';
         }

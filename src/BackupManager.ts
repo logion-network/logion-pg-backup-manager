@@ -19,8 +19,9 @@ export class BackupManager {
     readonly configuration: BackupManagerConfiguration;
 
     async trigger(date: DateTime) {
-        const command = await this.buildCommand();
+        await this.handleFailedEmail(date);
 
+        const command = await this.buildCommand();
         const commandName = command.name;
         if(commandName === Restore.NAME) {
             await this.configuration.commandFile.resetCommandFile(Pause.NAME);
@@ -33,7 +34,33 @@ export class BackupManager {
         await command.trigger(date);
 
         logger.info("Resetting error flag...");
-        await this.configuration.errorFile.setErrorFlag(false);
+        await this.configuration.errorFile.setErrorFlag("None");
+    }
+
+    private async handleFailedEmail(dateTime: DateTime) {
+        const errorState = await this.configuration.errorFile.readErrorFlag();
+        if(errorState === "EmailJournalFailure") {
+            logger.info("Retrying to send journal...");
+            try {
+                await this.configuration.mailer.sendJournalMail(this.configuration.mailTo, this.configuration.journal);
+                await this.configuration.errorFile.setErrorFlag("None");
+            } catch(e) {
+                logger.error("Failed to send journal on retry");
+            }
+        } else if(errorState === "EmailErrorFailure") {
+            logger.info("Retrying to send failure...");
+            try {
+                await this.configuration.mailer.sendFailureMail({
+                    to: this.configuration.mailTo,
+                    dateTime,
+                    error: "see logs",
+                    jobName: "see logs",
+                });
+                await this.configuration.errorFile.setErrorFlag("BackupFailure");
+            } catch(e) {
+                logger.error("Failed to send failure on retry");
+            }
+        }
     }
 
     private async buildCommand(): Promise<BackupManagerCommand> {
@@ -54,8 +81,8 @@ export class BackupManager {
 
     async notifyFailure(jobName: string, dateTime: DateTime, error: any) {
         const errorFlag = await this.configuration.errorFile.readErrorFlag();
-        if(!errorFlag) {
-            await this.configuration.errorFile.setErrorFlag(true);
+        if(errorFlag !== "BackupFailure" && errorFlag !== "EmailErrorFailure") {
+            await this.configuration.errorFile.setErrorFlag("BackupFailure");
             const mailer = this.configuration.mailer;
             try {
                 await mailer.sendFailureMail({
@@ -65,7 +92,8 @@ export class BackupManager {
                     error: error.message
                 });
             } catch(notifyError: any) {
-                logger.error(`Failed notifying error: ${notifyError.message}`)
+                logger.error(`Failed notifying error: ${notifyError.message}`);
+                await this.configuration.errorFile.setErrorFlag("EmailErrorFailure");
             }
         } else {
             logger.info(`Error already notified: ${error.message}`);
