@@ -63,6 +63,7 @@ export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
         fullBackupTriggerCron: process.env.FULL_BACKUP_TRIGGER_CRON!,
         commandFile: new CommandFile(path.join(workingDirectory, 'command.txt')),
         errorFile: new ErrorFile(path.join(workingDirectory, 'error.txt')),
+        restoredAndClose: process.env.RESTORE_AND_CLOSE === "true",
     };
     return new BackupManager(backupManagerConfiguration);
 }

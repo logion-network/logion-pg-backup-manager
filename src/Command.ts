@@ -29,6 +29,7 @@ export interface BackupManagerConfiguration {
     readonly fullBackupTriggerCron: string;
     readonly commandFile: CommandFile;
     readonly errorFile: ErrorFile;
+    readonly restoredAndClose: boolean;
 }
 
 export abstract class BackupManagerCommand {

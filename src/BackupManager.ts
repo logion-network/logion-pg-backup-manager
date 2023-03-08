@@ -19,7 +19,9 @@ export class BackupManager {
     readonly configuration: BackupManagerConfiguration;
 
     async trigger(date: DateTime) {
-        await this.handleFailedEmail(date);
+        if(!this.configuration.restoredAndClose) {
+            await this.handleFailedEmail(date);
+        }
 
         const command = await this.buildCommand();
         const commandName = command.name;
@@ -64,18 +66,22 @@ export class BackupManager {
     }
 
     private async buildCommand(): Promise<BackupManagerCommand> {
-        const commandName = await this.configuration.commandFile.readCommandName();
-        const journal = this.configuration.journal;
-        if(commandName === FullBackup.NAME || journal.getLastFullBackup() === undefined) {
-            return new FullBackup(this.configuration);
-        } else if(commandName === Backup.NAME || commandName === DEFAULT_COMMAND_NAME) {
-            return new Backup(this.configuration);
-        } else if(commandName === Restore.NAME) {
+        if(this.configuration.restoredAndClose) {
             return new Restore(this.configuration);
-        } else if(commandName === Pause.NAME) {
-            return new Pause(this.configuration);
         } else {
-            throw new Error(`Unsupported command ${commandName}`);
+            const commandName = await this.configuration.commandFile.readCommandName();
+            const journal = this.configuration.journal;
+            if(commandName === FullBackup.NAME || journal.getLastFullBackup() === undefined) {
+                return new FullBackup(this.configuration);
+            } else if(commandName === Backup.NAME || commandName === DEFAULT_COMMAND_NAME) {
+                return new Backup(this.configuration);
+            } else if(commandName === Restore.NAME) {
+                return new Restore(this.configuration);
+            } else if(commandName === Pause.NAME) {
+                return new Pause(this.configuration);
+            } else {
+                throw new Error(`Unsupported command ${commandName}`);
+            }
         }
     }
 

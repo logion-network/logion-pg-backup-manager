@@ -5,6 +5,8 @@ import schedule from 'node-schedule';
 import { getLogger, setLogLevel } from './util/Log';
 import { FullBackup } from './FullBackup';
 import { MailerException } from './Mailer';
+import { Logger } from 'winston';
+import { BackupManager } from './BackupManager';
 
 dotenv.config()
 
@@ -15,10 +17,42 @@ type JobName = 'Idle' | 'Backup' | 'QueueFullBackup';
 
 async function main() {
     const logger = getLogger();
-
     const { buildBackupManagerFromConfig } = await import("./Config");
-
     const backupManager = await buildBackupManagerFromConfig();
+
+    logger.info("");
+    logger.info("************************************");
+    logger.info("* Logion PostgreSQL Backup Manager *");
+    logger.info("************************************");
+    logger.info("");
+
+    if(backupManager.configuration.restoredAndClose) {
+        await restore({ logger, backupManager });
+    } else {
+        await runService({ logger, backupManager });
+    }
+}
+
+async function restore(args: {
+    logger: Logger,
+    backupManager: BackupManager,
+}) {
+    const { logger, backupManager } = args;
+
+    await backupManager.configuration.commandFile.resetCommandFile("Restore");
+    try {
+        await backupManager.trigger(DateTime.now());
+    } catch(e: any) {
+        logger.error(e.message);
+        logger.error(e.stack);
+    }
+}
+
+async function runService(args: {
+    logger: Logger,
+    backupManager: BackupManager,
+}) {
+    const { logger, backupManager } = args;
 
     let running: JobName = 'Idle';
     const doJob = async (jobName: JobName, trigger: (dateTime: DateTime) => Promise<void>) => {
@@ -56,12 +90,6 @@ async function main() {
             return Promise.resolve();
         }
     };
-
-    logger.info("");
-    logger.info("************************************");
-    logger.info("* Logion PostgreSQL Backup Manager *");
-    logger.info("************************************");
-    logger.info("");
 
     logger.info(`Trigger schedule: ${ backupManager.configuration.triggerCron }`);
     schedule.scheduleJob(backupManager.configuration.triggerCron, runCommand);
