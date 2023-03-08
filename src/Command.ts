@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { FileManager } from "./FileManager";
+import { Journal } from "./Journal";
 import { Mailer } from "./Mailer";
 import { Shell } from "./Shell";
 
@@ -18,15 +19,13 @@ export interface BackupManagerConfiguration {
     readonly password: string;
     readonly shell: Shell;
     readonly fullDumpConfiguration: FullDumpConfiguration;
-    readonly journalFile: string;
+    readonly journal: Journal;
     readonly maxFullBackups: number;
     readonly mailer: Mailer;
     readonly mailTo: string;
     readonly triggerCron: string;
     readonly fullBackupTriggerCron: string;
     readonly commandFile: string;
-    readonly forceFullBackup: boolean;
-    readonly periodicFullBackup: boolean;
     readonly errorFile: string;
 }
 
@@ -39,4 +38,6 @@ export abstract class BackupManagerCommand {
     readonly configuration: BackupManagerConfiguration;
 
     abstract trigger(date: DateTime): Promise<void>;
+
+    abstract get name(): string;
 }

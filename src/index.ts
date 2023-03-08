@@ -17,7 +17,7 @@ async function main() {
 
     const { buildBackupManagerFromConfig } = await import("./Config");
 
-    const backupManager = buildBackupManagerFromConfig();
+    const backupManager = await buildBackupManagerFromConfig();
 
     let running: JobName = 'Idle';
     const doJob = async (jobName: JobName, trigger: (backupManager: BackupManager, dateTime: DateTime) => Promise<void>) => {
@@ -36,7 +36,7 @@ async function main() {
         }
     };
 
-    const doBackup = async () => {
+    const runCommand = async () => {
         if (running === 'Idle') {
             await doJob('Backup', (backupManager, now) => backupManager.trigger(now))
         } else {
@@ -59,7 +59,7 @@ async function main() {
     logger.info("");
 
     logger.info(`Trigger schedule: ${ backupManager.configuration.triggerCron }`);
-    schedule.scheduleJob(backupManager.configuration.triggerCron, doBackup);
+    schedule.scheduleJob(backupManager.configuration.triggerCron, runCommand);
 
     logger.info(`Full Backup Trigger schedule: ${ backupManager.configuration.fullBackupTriggerCron }`);
     schedule.scheduleJob(backupManager.configuration.fullBackupTriggerCron, triggerFullBackup);

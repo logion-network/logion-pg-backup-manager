@@ -105,34 +105,42 @@ export class BackupFile {
 export class Journal implements Iterable<BackupFile> {
 
     static async read(path: string): Promise<Journal> {
-        const journal = new Journal();
+        const journal = new Journal(path);
+        try {
+            await access(path, constants.F_OK);
+            const file = await open(path, 'r');
+            const content = (await file.readFile()).toString("utf-8");
+            const lines = content.split(/\r?\n/);
+            await file.close();
 
-        const file = await open(path, 'r');
-        const content = (await file.readFile()).toString("utf-8");
-        const lines = content.split(/\r?\n/);
-        await file.close();
-
-        for(const line of lines) {
-            const elements = line.split(/[ \t]+/);
-            if(elements.length === 2) {
-                const cid = elements[0];
-                const fileName = BackupFileName.parse(elements[1]);
-                journal.addBackup(new BackupFile({
-                    cid,
-                    fileName
-                }));
-            } else if(elements.length === 3) {
-                const cid = elements[1];
-                const fileName = BackupFileName.parse(elements[2]);
-                journal.addBackup(new BackupFile({
-                    cid,
-                    fileName
-                }));
+            for(const line of lines) {
+                const elements = line.split(/[ \t]+/);
+                if(elements.length === 2) {
+                    const cid = elements[0];
+                    const fileName = BackupFileName.parse(elements[1]);
+                    journal.addBackup(new BackupFile({
+                        cid,
+                        fileName
+                    }));
+                } else if(elements.length === 3) {
+                    const cid = elements[1];
+                    const fileName = BackupFileName.parse(elements[2]);
+                    journal.addBackup(new BackupFile({
+                        cid,
+                        fileName
+                    }));
+                }
             }
+        } finally {
+            return journal;
         }
-
-        return journal;
     }
+
+    constructor(path: string) {
+        this.path = path;
+    }
+
+    readonly path: string;
 
     addBackup(backup: BackupFile) {
         this.backupFiles.push(backup);
@@ -140,8 +148,8 @@ export class Journal implements Iterable<BackupFile> {
 
     private backupFiles: BackupFile[] = [];
 
-    async write(path: string) {
-        const file = await open(path, 'w');
+    async write() {
+        const file = await open(this.path, 'w');
         for(const backupFile of this.backupFiles) {
             await file.write(Buffer.from(`${backupFile.cid} ${backupFile.fileName.fileName}\n`, "utf-8"));
         }
@@ -224,14 +232,5 @@ export class Journal implements Iterable<BackupFile> {
 
     [Symbol.iterator](): Iterator<BackupFile, BackupFile> {
         return this.backupFiles[Symbol.iterator]();
-    }
-}
-
-export async function readJournalOrNew(journalFile: string): Promise<Journal> {
-    try {
-        await access(journalFile, constants.F_OK);
-        return await Journal.read(journalFile);
-    } catch {
-        return new Journal();
     }
 }

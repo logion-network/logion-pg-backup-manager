@@ -4,11 +4,11 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, CommandName, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/BackupManager";
+import { BackupManager, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
 import { EncryptedFileWriter } from "../src/EncryptedFile";
 import { FileManager } from "../src/FileManager";
-import { BackupFile, BackupFileName } from "../src/Journal";
+import { BackupFile, BackupFileName, Journal } from "../src/Journal";
 import { Mailer, MailMessage } from "../src/Mailer";
 import { ProcessHandler, Shell } from "../src/Shell";
 
@@ -43,31 +43,13 @@ describe("BackupManager", () => {
 
         shell = new Mock<Shell>();
 
-        backupManagerConfiguration = {
-            fileManager: fileManager.object(),
-            logDirectory: "sample_logs",
-            password: "secret",
-            workingDirectory,
-            fullDumpConfiguration,
-            shell: shell.object(),
-            journalFile,
-            maxFullBackups: 1,
-            mailer: mailer.object(),
-            mailTo,
-            triggerCron: "* * * * * *",
-            fullBackupTriggerCron: "* * * * * *",
-            commandFile,
-            forceFullBackup: false,
-            periodicFullBackup: false,
-            errorFile,
-        };
-
         await setCommand("Default");
     });
 
     it("creates delta", async () => {
         let now = DateTime.now();
         await addFullBackupToJournal(now.minus({hours: 1}));
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName))).returns(Promise.resolve(cid));
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
@@ -107,6 +89,7 @@ describe("BackupManager", () => {
         const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
         const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
         await setCommand("Restore");
+        await setConfig();
 
         const manager = new BackupManager(backupManagerConfiguration);
         fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
@@ -128,13 +111,11 @@ describe("BackupManager", () => {
 
         fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
         fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
-
-        const postRestoreBackupFile = path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName);
-        fileManager.verify(instance => instance.moveToIpfs(postRestoreBackupFile), Times.Once());
     });
 
     it("sends failure notification if no error file", async () => {
         await rm(errorFile, {force: true});
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
@@ -143,6 +124,7 @@ describe("BackupManager", () => {
 
     it("sends failure notification if error flag unset", async () => {
         await setErrorFlag(false);
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
@@ -151,6 +133,7 @@ describe("BackupManager", () => {
 
     it("does not send failure notification if error flag set", async () => {
         await setErrorFlag(true);
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(false);
@@ -163,12 +146,32 @@ describe("BackupManager", () => {
         await addFullBackupToJournal(now.minus({hours: 1}));
         fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid"));
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.trigger(now);
         verifyFailureNotificationSent(false);
         await verifyErrorFlagSet(false);
     });
 });
+
+async function setConfig() {
+    backupManagerConfiguration = {
+        fileManager: fileManager.object(),
+        logDirectory: "sample_logs",
+        password: "secret",
+        workingDirectory,
+        fullDumpConfiguration,
+        shell: shell.object(),
+        journal: await Journal.read(journalFile),
+        maxFullBackups: 1,
+        mailer: mailer.object(),
+        mailTo,
+        triggerCron: "* * * * * *",
+        fullBackupTriggerCron: "* * * * * *",
+        commandFile,
+        errorFile,
+    };
+}
 
 async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
     const file = await open(journalFile, 'w');
@@ -200,6 +203,7 @@ async function clearJournal() {
 }
 
 async function testCreatesFullBackup(now: DateTime, removedBackupCid?: string) {
+    await setConfig();
     shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
     fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(""));
     if(removedBackupCid) {
@@ -256,7 +260,7 @@ async function addDeltaBackupToJournal(date: DateTime): Promise<BackupFile> {
     });
 }
 
-async function setCommand(commandName: CommandName): Promise<void> {
+async function setCommand(commandName: string): Promise<void> {
     const file = await open(commandFile, 'w');
     await file.write(Buffer.from(`${commandName}`));
     await file.close();

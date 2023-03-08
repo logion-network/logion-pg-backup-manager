@@ -5,14 +5,14 @@ import { BackupManagerCommand, BackupManagerConfiguration } from "./Command";
 import { Backup } from "./Backup";
 import { getLogger } from "./util/Log";
 import { Restore } from "./Restore";
+import { Pause } from "./Pause";
+import { FullBackup } from "./FullBackup";
 
 const logger = getLogger();
 
-export type CommandName = "Default" | "Backup" | "FullBackup" | "Restore";
+export const DEFAULT_COMMAND_NAME = "Default";
 
-export const DEFAULT_COMMAND_NAME: CommandName = "Default";
-
-export const COMMAND_NAMES: CommandName[] = [ DEFAULT_COMMAND_NAME, "Backup", "FullBackup", "Restore" ];
+export const COMMAND_NAMES = [ DEFAULT_COMMAND_NAME, Backup.NAME, FullBackup.NAME, Restore.NAME, Pause.NAME ];
 
 export const ERROR_FLAG_SET = "1";
 
@@ -27,24 +27,14 @@ export class BackupManager {
     readonly configuration: BackupManagerConfiguration;
 
     async trigger(date: DateTime) {
-        let command: BackupManagerCommand;
-        let commandName: string = await this.readCommandName();
-        if(commandName === "Backup" || commandName === DEFAULT_COMMAND_NAME) {
-            command = new Backup(this.configuration);
-        } else if(commandName === "FullBackup") {
-            command = new Backup({
-                ...this.configuration,
-                periodicFullBackup: true
-            });
-        } else if(commandName === "Restore") {
-            command = new Restore(this.configuration);
-        } else {
-            throw new Error(`Unsupported command ${commandName}`);
-        }
+        const command = await this.buildCommand();
 
-        if(commandName !== DEFAULT_COMMAND_NAME) {
+        const commandName = command.name;
+        if(commandName === Restore.NAME) {
+            await this.resetCommandFile(Pause.NAME);
+        } else if(commandName !== DEFAULT_COMMAND_NAME && commandName !== Pause.NAME) {
             logger.info("Resetting command file...");
-            await this.resetCommandFile();
+            await this.resetCommandFile(Backup.NAME);
         }
 
         logger.info(`Executing ${commandName} command...`);
@@ -54,18 +44,34 @@ export class BackupManager {
         await this.setErrorFlag(false);
     }
 
-    private async readCommandName(): Promise<string> {
+    private async buildCommand(): Promise<BackupManagerCommand> {
+        const commandName = await this.readCommandName();
+        const journal = this.configuration.journal;
+        if(commandName === FullBackup.NAME || journal.getLastFullBackup() === undefined) {
+            return new FullBackup(this.configuration);
+        } else if(commandName === Backup.NAME || commandName === DEFAULT_COMMAND_NAME) {
+            return new Backup(this.configuration);
+        } else if(commandName === Restore.NAME) {
+            return new Restore(this.configuration);
+        } else if(commandName === Pause.NAME) {
+            return new Pause(this.configuration);
+        } else {
+            throw new Error(`Unsupported command ${commandName}`);
+        }
+    }
+
+    private async readCommandName(): Promise<string | undefined> {
         let file: FileHandle;
         try {
             file = await open(this.configuration.commandFile, 'r');
         } catch {
-            return DEFAULT_COMMAND_NAME;
+            return undefined;
         }
 
         try {
             const content = await file.readFile({encoding: "utf-8"});
             const name = content.trim();
-            if(COMMAND_NAMES.includes(name as CommandName)) {
+            if(COMMAND_NAMES.includes(name)) {
                 return name;
             } else {
                 throw new Error(`Invalid command name ${name}`)
@@ -79,7 +85,7 @@ export class BackupManager {
         await this.resetCommandFile("FullBackup");
     }
 
-    private async resetCommandFile(commandName: CommandName = DEFAULT_COMMAND_NAME) {
+    private async resetCommandFile(commandName: string) {
         await this.resetFile(this.configuration.commandFile, commandName);
     }
 
