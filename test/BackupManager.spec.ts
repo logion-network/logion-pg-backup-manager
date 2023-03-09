@@ -4,12 +4,14 @@ import { It, Mock, Times } from 'moq.ts';
 import os from "os";
 import path from "path";
 
-import { BackupManager, CommandName, ERROR_FLAG_SET, ERROR_FLAG_UNSET } from "../src/BackupManager";
+import { BackupManager } from "../src/BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from "../src/Command";
+import { CommandFile } from "../src/CommandFile";
 import { EncryptedFileWriter } from "../src/EncryptedFile";
+import { ErrorFile, ErrorState } from "../src/ErrorFile";
 import { FileManager } from "../src/FileManager";
-import { BackupFile, BackupFileName } from "../src/Journal";
-import { Mailer, MailMessage } from "../src/Mailer";
+import { BackupFile, BackupFileName, Journal } from "../src/Journal";
+import { Mailer } from "../src/Mailer";
 import { ProcessHandler, Shell } from "../src/Shell";
 
 const workingDirectory = path.join(os.tmpdir(), "backup-manager-test");
@@ -39,28 +41,10 @@ describe("BackupManager", () => {
         fileManager = new Mock<FileManager>();
 
         mailer = new Mock<Mailer>();
-        mailer.setup(instance => instance.sendMail(It.IsAny())).returns(Promise.resolve());
+        mailer.setup(instance => instance.sendJournalMail(It.IsAny(), It.IsAny())).returns(Promise.resolve());
+        mailer.setup(instance => instance.sendFailureMail(It.IsAny())).returns(Promise.resolve());
 
         shell = new Mock<Shell>();
-
-        backupManagerConfiguration = {
-            fileManager: fileManager.object(),
-            logDirectory: "sample_logs",
-            password: "secret",
-            workingDirectory,
-            fullDumpConfiguration,
-            shell: shell.object(),
-            journalFile,
-            maxFullBackups: 1,
-            mailer: mailer.object(),
-            mailTo,
-            triggerCron: "* * * * * *",
-            fullBackupTriggerCron: "* * * * * *",
-            commandFile,
-            forceFullBackup: false,
-            periodicFullBackup: false,
-            errorFile,
-        };
 
         await setCommand("Default");
     });
@@ -68,6 +52,7 @@ describe("BackupManager", () => {
     it("creates delta", async () => {
         let now = DateTime.now();
         await addFullBackupToJournal(now.minus({hours: 1}));
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getDeltaBackupFileName(now).fileName))).returns(Promise.resolve(cid));
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
@@ -102,73 +87,107 @@ describe("BackupManager", () => {
         await testCreatesFullBackup(now, delta.cid);
     });
 
-    it("restores", async () => {
-        let now = DateTime.now();
-        const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
-        const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
-        await setCommand("Restore");
-
-        const manager = new BackupManager(backupManagerConfiguration);
-        fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
-        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
-        fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid2"));
-
-        const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
-        await createEncryptedFile(fullFilePath);
-        const deltaFilePath = path.join(workingDirectory, deltaFile.fileName.fileName);
-        await createEncryptedFile(deltaFilePath);
-
-        shell.setup(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.Is(pgRestoreOptions), It.IsAny())).returns(Promise.resolve());
-        shell.setup(instance => instance.spawn(It.Is(command => command === "psql"), It.Is(psqlOptions), It.IsAny())).returns(Promise.resolve());
-
-        await manager.trigger(now);
-
-        fileManager.verify(instance => instance.downloadFromIpfs(fullFile.cid, fullFilePath), Times.Once());
-        fileManager.verify(instance => instance.deleteFile(fullFilePath), Times.Once());
-
-        fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
-        fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
-
-        const postRestoreBackupFile = path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName);
-        fileManager.verify(instance => instance.moveToIpfs(postRestoreBackupFile), Times.Once());
-    });
+    it("restores", async () => testRestore(false));
+    it("forces restore only with restoreAndClose flag set", async () => testRestore(true));
 
     it("sends failure notification if no error file", async () => {
         await rm(errorFile, {force: true});
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
-        await verifyErrorFlagSet(true);
+        await verifyErrorStateIs("BackupFailure");
     });
 
     it("sends failure notification if error flag unset", async () => {
-        await setErrorFlag(false);
+        await setErrorState("None");
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(true);
-        await verifyErrorFlagSet(true);
+        await verifyErrorStateIs("BackupFailure");
     });
 
     it("does not send failure notification if error flag set", async () => {
-        await setErrorFlag(true);
+        await setErrorState("BackupFailure");
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.notifyFailure("Backup", DateTime.now(), new Error());
         verifyFailureNotificationSent(false);
-        await verifyErrorFlagSet(true);
+        await verifyErrorStateIs("BackupFailure");
     });
 
     it("unsets error flag after successful command execution", async () => {
         const now = DateTime.now();
-        await setErrorFlag(true);
+        await setErrorState("BackupFailure");
         await addFullBackupToJournal(now.minus({hours: 1}));
         fileManager.setup(instance => instance.moveToIpfs(It.IsAny())).returns(Promise.resolve("cid"));
         fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        await setConfig();
         const manager = new BackupManager(backupManagerConfiguration);
         await manager.trigger(now);
         verifyFailureNotificationSent(false);
-        await verifyErrorFlagSet(false);
+        await verifyErrorStateIs("None");
+    });
+
+    it("sends failed journal e-mail on command execution", async () => {
+        const now = DateTime.now();
+        await setErrorState("EmailJournalFailure");
+        await setCommand("Backup");
+        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(""));
+        shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
+        await setConfig();
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.trigger(now);
+        verifyMailSent(2);
+        await verifyErrorStateIs("None");
+    });
+
+    it("sends failed error e-mail on command execution", async () => {
+        const now = DateTime.now();
+        await setErrorState("EmailErrorFailure");
+        await setCommand("Backup");
+        fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+        fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(""));
+        shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
+        await setConfig();
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.trigger(now);
+        verifyFailureNotificationSent(true);
+        verifyMailSent(1);
+        await verifyErrorStateIs("None");
+    });
+
+    it("does not send failure notification if failed sending error e-mail", async () => {
+        await setErrorState("EmailErrorFailure");
+        await setConfig();
+        const manager = new BackupManager(backupManagerConfiguration);
+        await manager.notifyFailure("Backup", DateTime.now(), new Error());
+        verifyFailureNotificationSent(false);
+        await verifyErrorStateIs("EmailErrorFailure");
     });
 });
+
+async function setConfig(restoredAndClose?: boolean) {
+    backupManagerConfiguration = {
+        fileManager: fileManager.object(),
+        logDirectory: "sample_logs",
+        password: "secret",
+        workingDirectory,
+        fullDumpConfiguration,
+        shell: shell.object(),
+        journal: await Journal.read(journalFile),
+        maxFullBackups: 1,
+        mailer: mailer.object(),
+        mailTo,
+        triggerCron: "* * * * * *",
+        fullBackupTriggerCron: "* * * * * *",
+        commandFile: new CommandFile(commandFile),
+        errorFile: new ErrorFile(errorFile),
+        restoredAndClose: restoredAndClose || false,
+    };
+}
 
 async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
     const file = await open(journalFile, 'w');
@@ -182,16 +201,8 @@ async function addFullBackupToJournal(date: DateTime): Promise<BackupFile> {
     });
 }
 
-function verifyMailSent() {
-    mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(param =>
-        param.to === mailTo
-        && param.subject === "Backup journal updated"
-        && param.text !== undefined
-        && param.attachments !== undefined
-        && param.attachments.length === 1
-        && param.attachments[0].path === journalFile
-        && param.attachments[0].filename === "journal.txt"
-    )), Times.Exactly(1));
+function verifyMailSent(times?: number) {
+    mailer.verify(instance => instance.sendJournalMail(mailTo, backupManagerConfiguration.journal), Times.Exactly(times === undefined ? 1 : times));
 }
 
 async function clearJournal() {
@@ -200,6 +211,7 @@ async function clearJournal() {
 }
 
 async function testCreatesFullBackup(now: DateTime, removedBackupCid?: string) {
+    await setConfig();
     shell.setup(instance => instance.spawn).returns(fullBackupSpawnMock);
     fileManager.setup(instance => instance.moveToIpfs(path.join(workingDirectory, BackupFileName.getFullBackupFileName(now).fileName))).returns(Promise.resolve(""));
     if(removedBackupCid) {
@@ -256,7 +268,7 @@ async function addDeltaBackupToJournal(date: DateTime): Promise<BackupFile> {
     });
 }
 
-async function setCommand(commandName: CommandName): Promise<void> {
+async function setCommand(commandName: string): Promise<void> {
     const file = await open(commandFile, 'w');
     await file.write(Buffer.from(`${commandName}`));
     await file.close();
@@ -290,27 +302,67 @@ function psqlOptions(parameters: string[]): boolean {
     return parameters.every((value, index) => value === expectedParameters[index]);
 }
 
-async function setErrorFlag(errorFlag: boolean) {
+async function setErrorState(errorState: ErrorState) {
     const file = await open(errorFile, 'w');
-    await file.write(errorFlag ? ERROR_FLAG_SET : ERROR_FLAG_UNSET);
+    await file.write(errorState);
     await file.close();
 }
 
 function verifyFailureNotificationSent(expectSent: boolean) {
     if(expectSent) {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Once());
+        mailer.verify(instance => instance.sendFailureMail(It.IsAny()), Times.Once());
     } else {
-        mailer.verify(instance => instance.sendMail(It.Is<MailMessage>(message => message.subject === "Backup manager failure: Backup")), Times.Never());
+        mailer.verify(instance => instance.sendFailureMail(It.IsAny()), Times.Never());
     }
 }
 
-async function verifyErrorFlagSet(expectSet: boolean) {
+async function verifyErrorStateIs(expectState: ErrorState) {
     const file = await open(errorFile, 'r');
     const content = await file.readFile('utf-8');
     await file.close();
-    if(expectSet) {
-        expect(content).toBe(ERROR_FLAG_SET);
-    } else {
-        expect(content).toBe(ERROR_FLAG_UNSET);
+    expect(content).toBe(expectState);
+}
+
+async function testRestore(restoreAndClose: boolean) {
+    let now = DateTime.now();
+    const fullFile = await addFullBackupToJournal(now.minus({hours: 1}));
+    const deltaFile = await addDeltaBackupToJournal(now.minus({minutes: 30}));
+    if(!restoreAndClose) {
+        await setCommand("Restore");
     }
+    await setConfig(restoreAndClose);
+
+    const manager = new BackupManager(backupManagerConfiguration);
+    fileManager.setup(instance => instance.downloadFromIpfs(It.IsAny(), It.IsAny())).returns(Promise.resolve());
+    fileManager.setup(instance => instance.deleteFile(It.IsAny())).returns(Promise.resolve());
+
+    const fullFilePath = path.join(workingDirectory, fullFile.fileName.fileName);
+    await createEncryptedFile(fullFilePath);
+    const deltaFilePath = path.join(workingDirectory, deltaFile.fileName.fileName);
+    await createEncryptedFile(deltaFilePath);
+
+    shell.setup(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.Is(pgRestoreOptions), It.IsAny())).returns(Promise.resolve());
+    shell.setup(instance => instance.spawn(It.Is(command => command === "psql"), It.Is(psqlOptions), It.IsAny())).returns(Promise.resolve());
+
+    await manager.trigger(now);
+
+    fileManager.verify(instance => instance.downloadFromIpfs(fullFile.cid, fullFilePath), Times.Once());
+    fileManager.verify(instance => instance.deleteFile(fullFilePath), Times.Once());
+
+    fileManager.verify(instance => instance.downloadFromIpfs(deltaFile.cid, deltaFilePath), Times.Once());
+    fileManager.verify(instance => instance.deleteFile(deltaFilePath), Times.Once());
+
+    shell.verify(instance => instance.spawn(It.Is(command => command === "pg_restore"), It.IsAny(), It.IsAny()), Times.Once());
+    shell.verify(instance => instance.spawn(It.Is(command => command === "psql"), It.IsAny(), It.IsAny(), It.IsAny()), Times.Once());
+
+    verifyFailureNotificationSent(false);
+    verifyMailSent(0);
+    await verifyCommandIs("Pause");
+}
+
+async function verifyCommandIs(expectCommand: string) {
+    const file = await open(commandFile, 'r');
+    const content = await file.readFile('utf-8');
+    await file.close();
+    expect(content).toBe(expectCommand);
 }

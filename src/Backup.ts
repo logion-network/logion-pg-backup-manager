@@ -4,37 +4,32 @@ import path from "path";
 
 import { BackupManagerCommand } from "./Command";
 import { EncryptedFileWriter } from "./EncryptedFile";
-import { BackupFile, BackupFileName, readJournalOrNew } from "./Journal";
+import { BackupFile, BackupFileName } from "./Journal";
 import { LogsProcessor } from "./LogsProcessor";
-import { ProcessHandler } from "./Shell";
 import { getLogger } from "./util/Log";
 
 const logger = getLogger();
 
 export class Backup extends BackupManagerCommand {
 
+    static NAME = "Backup";
+
+    get name(): string {
+        return Backup.NAME;
+    }
+
     async trigger(date: DateTime): Promise<void> {
-        const journal = await readJournalOrNew(this.configuration.journalFile);
+        const journal = this.configuration.journal;
 
         let backupFile: BackupFileName;
         let backupFilePath: string;
-        const lastFullBackup = journal.getLastFullBackup();
-        let deltaBackupResult: DeltaBackupResult | undefined = undefined;
-        if(this.configuration.forceFullBackup
-                || lastFullBackup === undefined
-                || this.configuration.periodicFullBackup) {
-            logger.info("Producing full backup...");
-            backupFile = BackupFileName.getFullBackupFileName(date);
-            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
-            await this.doFullBackup(backupFilePath);
-        } else {
-            logger.info("Producing delta...");
-            backupFile = BackupFileName.getDeltaBackupFileName(date);
-            backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
-            deltaBackupResult = await this.doDeltaBackup(backupFilePath);
-        }
 
-        if(deltaBackupResult === undefined || !deltaBackupResult.emptyDelta) {
+        logger.info("Producing delta...");
+        backupFile = BackupFileName.getDeltaBackupFileName(date);
+        backupFilePath = path.join(this.configuration.workingDirectory, backupFile.fileName);
+        const deltaBackupResult = await this.doDeltaBackup(backupFilePath);
+
+        if(!deltaBackupResult.emptyDelta) {
             const fileStat = await stat(backupFilePath);
             logger.info(`File is ${fileStat.size} bytes large.`);
             logger.info(`Adding file ${backupFilePath} to IPFS...`);
@@ -43,62 +38,23 @@ export class Backup extends BackupManagerCommand {
 
             journal.addBackup(new BackupFile({cid, fileName: backupFile}));
 
-            if(!this.configuration.forceFullBackup) {
-                const toRemove = journal.keepOnlyLastFullBackups(this.configuration.maxFullBackups);
-                for(const file of toRemove) {
-                    logger.info(`Clean-up: removing ${file.fileName.fileName} from IPFS...`);
-                    this.configuration.fileManager.removeFileFromIpfs(file.cid);
-                }
-            }
-
             logger.info("Writing journal...");
-            await journal.write(this.configuration.journalFile);
-            logger.info("Journal successfully written, sending by e-mail...");
-
-            await this.configuration.mailer.sendMail({
-                to: this.configuration.mailTo,
-                subject: "Backup journal updated",
-                text: "New journal file available, see attachment.",
-                attachments: [
-                    {
-                        path: this.configuration.journalFile,
-                        filename: "journal.txt"
-                    }
-                ]
-            });
+            await journal.write();
         } else {
             logger.info("No change detected.");
         }
 
-        if(deltaBackupResult !== undefined) {
-            logger.info("Removing processed logs...");
-            for(const file of deltaBackupResult.logsToRemove) {
-                this.configuration.fileManager.deleteFile(file);
-            }
+        logger.info("Removing processed logs...");
+        for(const file of deltaBackupResult.logsToRemove) {
+            this.configuration.fileManager.deleteFile(file);
+        }
+
+        if(!deltaBackupResult.emptyDelta) {
+            logger.info("Sending journal by e-mail...");
+            await this.configuration.mailer.sendJournalMail(this.configuration.mailTo, journal);
         }
 
         logger.info("All done.");
-    }
-
-    private async doFullBackup(backupFilePath: string) {
-        const writer = new EncryptedFileWriter(this.configuration.password);
-        await writer.open(backupFilePath);
-        try {
-            const pgDumpHandler = new PgDumpProcessHandler(writer);
-            const fullDumpConfiguration = this.configuration.fullDumpConfiguration;
-            const parameters = [
-                '-F', 'c',
-                '-h', fullDumpConfiguration.host,
-                '-U', fullDumpConfiguration.user,
-                fullDumpConfiguration.database
-            ];
-            await this.configuration.shell.spawn("pg_dump", parameters, pgDumpHandler);
-            await writer.close();
-        } catch(e) {
-            await writer.close();
-            await this.configuration.fileManager.deleteFile(backupFilePath);
-            throw e;
-        }
     }
 
     private async doDeltaBackup(backupFilePath: string): Promise<DeltaBackupResult> {
@@ -163,24 +119,6 @@ export class Backup extends BackupManagerCommand {
     private isNotTransactionMod(sql: string): boolean {
         return !sql.startsWith('INSERT INTO "transaction"')
             && !sql.startsWith('DELETE FROM "transaction"');
-    }
-}
-
-class PgDumpProcessHandler extends ProcessHandler {
-
-    constructor(writer: EncryptedFileWriter) {
-        super();
-        this.writer = writer;
-    }
-
-    private writer: EncryptedFileWriter;
-
-    async onStdOut(data: any) {
-        await this.writer.write(data);
-    }
-
-    async onStdErr(data: any) {
-        logger.warn(data.toString("utf-8"));
     }
 }
 

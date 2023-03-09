@@ -3,11 +3,14 @@ import path from 'path';
 
 import { BackupManager } from "./BackupManager";
 import { BackupManagerConfiguration, FullDumpConfiguration } from './Command';
+import { CommandFile } from './CommandFile';
+import { ErrorFile } from './ErrorFile';
 import { DefaultFileManager, DefaultFileManagerConfiguration } from './FileManager';
+import { Journal } from './Journal';
 import { Mailer } from './Mailer';
 import { DefaultShell } from './Shell';
 
-export function buildBackupManagerFromConfig(): BackupManager {
+export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
     const logDirectory = process.env.LOG_DIRECTORY;
     if(!logDirectory) {
         throw new Error("No logs directory given");
@@ -52,16 +55,15 @@ export function buildBackupManagerFromConfig(): BackupManager {
         workingDirectory,
         fullDumpConfiguration,
         shell,
-        journalFile: path.join(workingDirectory, 'journal.txt'),
+        journal: await Journal.read(path.join(workingDirectory, 'journal.txt')),
         maxFullBackups: Number(process.env.MAX_FULL_BACKUPS!),
         mailer,
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
         fullBackupTriggerCron: process.env.FULL_BACKUP_TRIGGER_CRON!,
-        commandFile: path.join(workingDirectory, 'command.txt'),
-        forceFullBackup: false,
-        periodicFullBackup: false,
-        errorFile: path.join(workingDirectory, 'error.txt'),
+        commandFile: new CommandFile(path.join(workingDirectory, 'command.txt')),
+        errorFile: new ErrorFile(path.join(workingDirectory, 'error.txt')),
+        restoredAndClose: process.env.RESTORE_AND_CLOSE === "true",
     };
     return new BackupManager(backupManagerConfiguration);
 }
