@@ -26,6 +26,7 @@ export class BackupManager {
         const command = await this.buildCommand();
         const commandName = command.name;
         if(commandName === Restore.NAME) {
+            logger.info("Resetting command file...");
             await this.configuration.commandFile.setCommandName(Pause.NAME);
         } else if(commandName !== DEFAULT_COMMAND_NAME && commandName !== Pause.NAME) {
             logger.info("Resetting command file...");
