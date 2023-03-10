@@ -10,14 +10,16 @@ import { Journal } from './Journal';
 import { Mailer } from './Mailer';
 import { DefaultShell } from './Shell';
 
-export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
+export async function getBackupManagerConfig(validateAndSetup: boolean): Promise<BackupManagerConfiguration> {
     const logDirectory = process.env.LOG_DIRECTORY;
-    if(!logDirectory) {
+    if(validateAndSetup && !logDirectory) {
         throw new Error("No logs directory given");
     }
 
-    const workingDirectory = process.env.WORKING_DIRECTORY!;
-    mkdirSync(workingDirectory, {recursive: true});
+    const workingDirectory = process.env.WORKING_DIRECTORY;
+    if(validateAndSetup && workingDirectory) {
+        mkdirSync(workingDirectory, {recursive: true});
+    }
 
     const fullDumpConfiguration: FullDumpConfiguration = {
         user: process.env.PG_USER!,
@@ -48,22 +50,28 @@ export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
         ipfs: process.env.IPFS!,
         ipfsHost: process.env.IPFS_HOST!,
     };
-    const backupManagerConfiguration: BackupManagerConfiguration = {
+
+    const actualWorkingDirectory = workingDirectory || "work";
+    return {
         fileManager: new DefaultFileManager(fileManagerConfiguration),
-        logDirectory,
+        logDirectory: logDirectory || "/var/lib/pgsql/data/logs",
         password: process.env.ENC_PASSWORD!,
-        workingDirectory,
+        workingDirectory: actualWorkingDirectory,
         fullDumpConfiguration,
         shell,
-        journal: await Journal.read(path.join(workingDirectory, 'journal.txt')),
+        journal: await Journal.read(path.join(actualWorkingDirectory, 'journal.txt')),
         maxFullBackups: Number(process.env.MAX_FULL_BACKUPS!),
         mailer,
         mailTo: process.env.MAIL_TO!,
         triggerCron: process.env.TRIGGER_CRON!,
         fullBackupTriggerCron: process.env.FULL_BACKUP_TRIGGER_CRON!,
-        commandFile: new CommandFile(path.join(workingDirectory, 'command.txt')),
-        errorFile: new ErrorFile(path.join(workingDirectory, 'error.txt')),
+        commandFile: new CommandFile(path.join(actualWorkingDirectory, 'command.txt')),
+        errorFile: new ErrorFile(path.join(actualWorkingDirectory, 'error.txt')),
         restoredAndClose: process.env.RESTORE_AND_CLOSE === "true",
     };
+}
+
+export async function buildBackupManagerFromConfig(): Promise<BackupManager> {
+    const backupManagerConfiguration = await getBackupManagerConfig(true);
     return new BackupManager(backupManagerConfiguration);
 }
