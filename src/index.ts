@@ -7,6 +7,7 @@ import { FullBackup } from './FullBackup';
 import { MailerException } from './Mailer';
 import { Logger } from 'winston';
 import { BackupManager } from './BackupManager';
+import { EncryptedFileReader } from './EncryptedFile';
 
 dotenv.config()
 
@@ -16,6 +17,11 @@ main();
 type JobName = 'Idle' | 'Backup' | 'QueueFullBackup';
 
 async function main() {
+    const decryptIndex = process.argv.findIndex(option => option === "--decrypt");
+    if(decryptIndex !== -1) {
+        await decryptAndExit(decryptIndex);
+    }
+
     const logger = getLogger();
     const { buildBackupManagerFromConfig } = await import("./Config");
     const backupManager = await buildBackupManagerFromConfig();
@@ -31,6 +37,22 @@ async function main() {
     } else {
         await runService({ logger, backupManager });
     }
+}
+
+async function decryptAndExit(decryptIndex: number) {
+    if(process.argv.length < decryptIndex + 2) {
+        console.log("--decrypt expects a file name");
+        process.exit(1);
+    }
+    const file = process.argv[decryptIndex + 1];
+    const { getBackupManagerConfig } = await import("./Config");
+    const configuration = await getBackupManagerConfig(false);
+    const reader = new EncryptedFileReader(configuration.password);
+    await reader.open(file);
+    const content = await reader.readAll();
+    console.log(content.toString());
+    await reader.close();
+    process.exit(0);
 }
 
 async function restore(args: {
