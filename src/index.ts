@@ -55,6 +55,7 @@ async function runService(args: {
     const { logger, backupManager } = args;
 
     let running: JobName = 'Idle';
+    let fullBackupSkipped = false;
     const doJob = async (jobName: JobName, trigger: (dateTime: DateTime) => Promise<void>) => {
         running = jobName;
         const now = DateTime.now().set({ millisecond: 0 });
@@ -77,16 +78,26 @@ async function runService(args: {
 
     const runCommand = async () => {
         if (running === 'Idle') {
-            await doJob('Backup', (now) => backupManager.trigger(now))
+            if(fullBackupSkipped) {
+                await doQueueFullBackupJob();
+                fullBackupSkipped = false;
+            } else {
+                await doJob('Backup', (now) => backupManager.trigger(now));
+            }
         } else {
             return Promise.resolve();
         }
     };
 
+    async function doQueueFullBackupJob() {
+        await doJob('QueueFullBackup', () => backupManager.configuration.commandFile.setCommandName(FullBackup.NAME));
+    }
+
     const queueFullBackup = async () => {
-        if (running !== 'Idle') {
-            await doJob('QueueFullBackup', () => backupManager.configuration.commandFile.setCommandName(FullBackup.NAME))
+        if (running === 'Idle') {
+            await doQueueFullBackupJob();
         } else {
+            fullBackupSkipped = true;
             return Promise.resolve();
         }
     };
