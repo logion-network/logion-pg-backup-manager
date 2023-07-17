@@ -5,7 +5,7 @@ import { getLogger } from "./util/Log";
 const logger = getLogger();
 
 const STATEMENT_PREFIX = "statement: ";
-const UNNAMED_QUERY = "execute <unnamed>: ";
+const QUERY = /^execute [a-z0-9A-Z_<>]+: /;
 const IGNORED_APPLICATIONS = [ "pg_restore", APP_NAME ]
 
 export class SqlGenerator {
@@ -32,8 +32,9 @@ export class SqlGenerator {
         } else if(message.startsWith(STATEMENT_PREFIX)) {
             const query = message.substring(STATEMENT_PREFIX.length);
             return query;
-        } else if(message.startsWith(UNNAMED_QUERY)) {
-            const query = message.substring(UNNAMED_QUERY.length);
+        } else if(QUERY.test(message)) {
+            const queryStart = message.indexOf(":");
+            const query = message.substring(queryStart + 2);
             const parameters = row['14'] as string;
             const parametersRecord = new ParametersExtractor(parameters).extract();
             return this.resolvePlaceholders(query, parametersRecord);

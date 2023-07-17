@@ -31,6 +31,13 @@ const ERROR = {
     '22': "psql"
 };
 
+const EXECUTE_NAMED = {
+    '7': "INSERT",
+    '11': 'LOG',
+    '13': `execute tsp_0: ${EXECUTE_INSTRUCTION}`,
+    '14': "parameters: $1 = '41de0a6d-1fd2-49e7-a5f2-f28952233007', $2 = '2022-04-05 09:33:23.219', $3 = 'f', $4 = '5EBxoSssqNo23FvsDeUxjyQScnfEiGxJaNwuwqBH2Twe35BX', $5 = 'gerard@logion.network', $6 = 'Gérard', $7 = 'Dethier', $8 = '+1234', $9 = '?', $10 = '?', $11 = '?', $12 = '?', $13 = '?', $14 = 'PENDING', $15 = '5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty'"
+};
+
 describe("SqlGenerator", () => {
 
     it("returns undefined if regular log", () => {
@@ -45,7 +52,7 @@ describe("SqlGenerator", () => {
         expect(sql).toBe(STATEMENT_INSTRUCTION);
     });
 
-    it("returns resolved query if execute", () => {
+    it("returns resolved unnamed query if execute", () => {
         const sqlGenerator = new SqlGenerator();
         const sql = sqlGenerator.generate(EXECUTE);
         expect(sql).toBe(RESOLVED_EXECUTE_INSTRUCTION);
@@ -55,5 +62,11 @@ describe("SqlGenerator", () => {
         const sqlGenerator = new SqlGenerator();
         const sql = sqlGenerator.generate(ERROR);
         expect(sql).toBeUndefined();
+    });
+
+    it("returns resolved named query if execute", () => {
+        const sqlGenerator = new SqlGenerator();
+        const sql = sqlGenerator.generate(EXECUTE_NAMED);
+        expect(sql).toBe(RESOLVED_EXECUTE_INSTRUCTION);
     });
 });
