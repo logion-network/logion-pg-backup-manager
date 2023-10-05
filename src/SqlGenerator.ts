@@ -24,23 +24,44 @@ export class SqlGenerator {
         const message = row['13'] as string;
         const applicationName = row['22'] as string;
         logger.debug(`commandTag=${commandTag} errorSeverity=${errorSeverity} message=${message} applicationName=${applicationName}`);
-        if(!commandTag
-                || errorSeverity !== "LOG"
-                || IGNORED_APPLICATIONS.includes(applicationName)
-                || this.isErrorMessage(message)) {
+        if(this.canIgnore({ commandTag, errorSeverity, message, applicationName })) {
             return undefined;
-        } else if(message.startsWith(STATEMENT_PREFIX)) {
+        } else if(this.isStatement(message)) {
             const query = message.substring(STATEMENT_PREFIX.length);
             return query;
-        } else if(QUERY.test(message)) {
+        } else if(this.isQuery(message)) {
             const queryStart = message.indexOf(":");
             const query = message.substring(queryStart + 2);
             const parameters = row['14'] as string;
             const parametersRecord = new ParametersExtractor(parameters).extract();
             return this.resolvePlaceholders(query, parametersRecord);
         } else {
-            throw new Error(`Invalid row: commandTag=${commandTag}, message=${message}`);
+            throw new Error(`Invalid row: commandTag=${commandTag}, errorSeverity=${errorSeverity}, message=${message}, applicationName=${applicationName}`);
         }
+    }
+
+    canIgnore(params: { commandTag: string, errorSeverity: string, applicationName: string, message: string }): boolean {
+        const { commandTag, errorSeverity, applicationName, message} = params;
+        return !commandTag
+            || errorSeverity !== "LOG"
+            || IGNORED_APPLICATIONS.includes(applicationName)
+            || this.isError(message);
+    }
+
+    isError(message: string): boolean {
+        return !(this.isQuery(message) || this.isStatement(message)) &&
+            (
+                /Connection reset by peer/i.test(message)
+                || /unexpected EOF/i.test(message)
+            );
+    }
+
+    isQuery(message: string): boolean {
+        return QUERY.test(message);
+    }
+
+    isStatement(message: string): boolean {
+        return message.startsWith(STATEMENT_PREFIX);
     }
 
     private resolvePlaceholders(query: string, parameters: Record<string, string>): string {
@@ -49,9 +70,5 @@ export class SqlGenerator {
             resolvedQuery = resolvedQuery.replace(parameter, parameters[parameter]);
         }
         return resolvedQuery;
-    }
-
-    isErrorMessage(message: string): boolean {
-        return /Connection reset by peer/i.test(message);
     }
 }
